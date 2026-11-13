@@ -243,9 +243,35 @@ td.ck input{width:22px;height:22px}
 #hdrSync.busy svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (max-width:760px){ #hdrSync{padding:4px 8px;font-size:12.5px} }
+
+.gate{position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.gate.hidden{display:none}
+.gate-card{width:min(380px,100%);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 24px;display:grid;gap:12px;justify-items:center;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.gate-card h1{font-size:26px}
+.gate-card .f{text-align:left}
+.gate-card #gMsg{min-height:1.4em}
+body.crew .admin-only{display:none !important}
+body:not(.crew) .crew-only{display:none !important}
+.trow{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(110px,1fr) 110px 90px auto;gap:8px;align-items:end;border-top:1px solid var(--line);padding-top:10px}
+.trow:first-child{border-top:0;padding-top:0}
+.trow .em{font-weight:600;word-break:break-all;align-self:center}
+.trow input,.trow select{min-height:38px}
+@media (max-width:760px){ .trow{grid-template-columns:1fr 1fr} .trow .em{grid-column:1/-1} }
+#teamPanel{grid-column:1/-1}
+#teamList{min-width:0}
 </style>
 </head>
 <body>
+<div id="gate" class="gate"><div class="gate-card">
+  <svg width="48" height="48" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="var(--accent-soft)"/><circle cx="15" cy="15" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="2" fill="var(--accent)"/></svg>
+  <h1>Reno Tree Inventory</h1><p class="note m0">City of Reno · Urban Forestry</p>
+  <form id="gForm" class="stackv" style="width:100%">
+    <label class="f">Email<input type="email" id="gEmail" autocomplete="username" required></label>
+    <label class="f">Password<input type="password" id="gPass" autocomplete="current-password" required></label>
+    <button class="btn primary big" id="gLogin" type="submit">Sign in</button>
+  </form>
+  <div class="note" id="gMsg">Loading…</div>
+</div></div>
 <header class="top">
   <div class="top-inner">
     <div class="brand">
@@ -257,7 +283,7 @@ td.ck input{width:22px;height:22px}
       <a href="#nearby" data-view="nearby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>Nearby</a>
       <a href="#trees" data-view="trees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="6"/><path d="M12 15v7"/></svg>Trees</a>
       <a href="#work" data-view="work"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Work</a>
-      <a href="#requests" data-view="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H8l-4 4z"/></svg>Requests</a>
+      <a href="#requests" data-view="requests" class="admin-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H8l-4 4z"/></svg>Requests</a>
       <a href="#more" data-view="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>More</a>
     </nav>
   </div>
@@ -276,7 +302,7 @@ td.ck input{width:22px;height:22px}
       <div class="maptools"><label class="f inline">Color trees by <select id="nColor"><option value="cond">Condition</option><option value="work">Open work</option><option value="insp">Last inspected</option></select></label><button class="btn small" id="mapBig">Larger map</button><button class="btn small hidden" id="routeClear">Clear route</button></div>
       <div class="legend" id="mapLegend"></div>
       <div class="filters">
-        <select id="nShow" aria-label="Show"><option value="Active">Trees</option><option value="">All sites (stumps, planting sites)</option><option value="open">Trees with open work</option><option value="req">Open requests</option></select>
+        <select id="nShow" aria-label="Show"><option value="Active">Trees</option><option value="">All sites (stumps, planting sites)</option><option value="open">Trees with open work</option><option value="req" class="admin-only">Open requests</option></select>
         <select id="nCount" aria-label="How many"><option>25</option><option selected>50</option><option>100</option></select>
       </div>
       <div class="near" id="nearList"><div class="empty pad">No location yet.</div></div>
@@ -309,8 +335,9 @@ td.ck input{width:22px;height:22px}
       <div class="toolbar">
         <div class="segs big" role="tablist"><button type="button" data-mode="records" aria-pressed="true">Work records</button><button type="button" data-mode="board" aria-pressed="false">Board</button><button type="button" data-mode="orders" aria-pressed="false">Work orders</button></div>
         <span class="spacer"></span>
+        <span class="chip c-acc crew-only" id="crewChip"></span>
         <button class="btn primary" id="addWR">New work record</button>
-        <button class="btn primary hidden" id="addWO">New work order</button>
+        <button class="btn primary hidden admin-only" id="addWO">New work order</button>
       </div>
       <!-- records -->
       <div id="recPane" class="stackv">
@@ -323,7 +350,7 @@ td.ck input{width:22px;height:22px}
           <select id="rWO" aria-label="Work order"><option value="">In any work order or none</option><option value="none">Not in a work order</option></select>
           <select id="rTrim" aria-label="Trim cycle area"><option value="">All trim cycle areas</option></select>
         </div>
-        <div class="selbar" id="selBar"><span id="selCount">0 selected</span><button class="btn small" id="selAll">Select all shown</button><button class="btn small" id="selNone">Clear</button><button class="btn small" id="selRoute">Suggest route</button><button class="btn small primary" id="selToWO">Add to work order</button></div>
+        <div class="selbar" id="selBar"><span id="selCount">0 selected</span><button class="btn small" id="selAll">Select all shown</button><button class="btn small" id="selNone">Clear</button><button class="btn small" id="selRoute">Suggest route</button><button class="btn small primary admin-only" id="selToWO">Add to work order</button></div>
         <div class="count" id="recCount"></div>
         <div class="list"><table>
           <thead><tr><th class="ck"><span class="sr">Select</span></th><th data-sort="priRank">Priority</th><th data-sort="task">Task</th><th data-sort="treeTag">Tree / location</th><th data-sort="crew">Crew</th><th data-sort="created">Created</th><th data-sort="status">Status</th></tr></thead>
@@ -361,18 +388,18 @@ td.ck input{width:22px;height:22px}
   <!-- MORE: overview + data -->
   <section id="view-more" class="view" aria-label="Overview and data">
     <div class="stackv" style="gap:16px">
-      <div class="tiles" id="tiles"></div>
-      <div class="grid2">
+      <div class="tiles admin-only" id="tiles"></div>
+      <div class="grid2 admin-only">
         <div class="panel"><h2>Needs attention</h2><div class="sub">Open P1 and P2 work, overdue work and high-priority requests</div><div class="attn" id="attn"></div></div>
         <div class="panel"><h2>Open work by task</h2><div class="bars" id="byTask"></div></div>
       </div>
-      <div class="grid2">
+      <div class="grid2 admin-only">
         <div class="panel"><h2>Work completed, last 12 months</h2><div class="bars" id="doneCat"></div><div class="note" id="doneNote"></div></div>
         <div class="panel"><h2>Condition</h2><div class="stack" id="condStack"></div><div class="legend" id="condLegend"></div><div class="note" id="inspNote"></div></div>
       </div>
-      <div class="panel"><h2>Species composition</h2><div class="sub">Active trees. Reno&rsquo;s street tree guidelines cap any one species at 10% of the inventory; bars over 10% are flagged.</div><div class="bars" id="species"></div><div class="note" id="genusNote"></div></div>
+      <div class="panel admin-only"><h2>Species composition</h2><div class="sub">Active trees. Reno&rsquo;s street tree guidelines cap any one species at 10% of the inventory; bars over 10% are flagged.</div><div class="bars" id="species"></div><div class="note" id="genusNote"></div></div>
 
-      <h2 style="font-size:24px;margin-top:8px">Data</h2>
+      <h2 style="font-size:24px;margin-top:8px" class="admin-only">Data</h2>
       <div class="datagrid">
         <div class="panel" id="sbPanel">
           <h2>Team database</h2>
@@ -382,7 +409,13 @@ td.ck input{width:22px;height:22px}
             <label class="f">Publishable (anon) key<input type="text" id="sbKeyIn" placeholder="sb_publishable_…"></label></details>
           <div id="sbBody" class="stackv"></div>
         </div>
-        <div class="panel">
+        <div class="panel admin-only" id="teamPanel">
+          <h2>Team &amp; crews</h2>
+          <p class="note m0">Set each person's role. <b>Admins</b> see everything. <b>Crew</b> accounts see the tree inventory plus only the work records and work orders whose Crew or Assigned to field includes their crew code (for example LP), and anything they flag themselves.</p>
+          <div id="teamList" class="stackv"></div>
+          <div class="note" id="teamMsg"></div>
+        </div>
+        <div class="panel admin-only">
           <h2>Import from TreePlotter</h2>
           <p class="note m0">Select one or more CSV exports: trees, work records, work orders, inspections and service requests. The app recognizes each file. Re-importing updates records by their TreePlotter ID and keeps anything you've changed in this app. When you're signed in to the team database, imported records are uploaded for everyone, so only one person needs to import.</p>
           <button class="btn primary" id="importBtn">Choose CSV files</button>
@@ -390,7 +423,7 @@ td.ck input{width:22px;height:22px}
           <div class="progress hidden" id="impProg"><span></span></div>
           <div class="note" id="impMsg"></div>
         </div>
-        <div class="panel">
+        <div class="panel admin-only">
           <h2>Back up and move devices</h2>
           <p class="note m0">Everything lives on this device only. Save a backup regularly, and restore it to move your data to another phone or computer.</p>
           <label class="check"><input type="checkbox" id="bkPhotos" checked> Include photos</label>
@@ -399,7 +432,7 @@ td.ck input{width:22px;height:22px}
           <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
           <div class="note" id="bkMsg"></div>
         </div>
-        <div class="panel">
+        <div class="panel admin-only">
           <h2>Move data by file</h2>
           <p class="note m0">Without the team database: send a changes file from one device and merge it on the other. Where the same record was edited on both, the newer edit wins.</p>
           <label class="f">This device's name<input type="text" id="deviceName" placeholder="e.g. CG phone"></label>
@@ -408,7 +441,7 @@ td.ck input{width:22px;height:22px}
           <input type="file" id="mergeFile" accept=".json,application/json" multiple class="hidden">
           <div class="note" id="syncMsg"></div>
         </div>
-        <div class="panel">
+        <div class="panel admin-only">
           <h2>Export</h2>
           <p class="note m0">Spreadsheets for the office or for entering updates in TreePlotter. "Changed here" exports only what was added or edited in this app.</p>
           <button class="btn" id="expTrees">Trees CSV</button>
@@ -421,7 +454,7 @@ td.ck input{width:22px;height:22px}
           <h2>This device</h2>
           <label class="f">Your name or initials (for inspections and crew)<input type="text" id="inspectorName" placeholder="e.g. CG"></label>
           <div class="note" id="storeMsg"></div>
-          <button class="btn danger" id="wipeBtn">Delete all data on this device</button>
+          <button class="btn danger admin-only" id="wipeBtn">Delete all data on this device</button>
         </div>
       </div>
     </div>
@@ -569,8 +602,8 @@ function nextNum(map, field){ let max=0; for(const x of map.values()){ const m=/
 const nextTag = () => nextNum(S.trees,"tag");
 
 /* ================= derived ================= */
-function openWRByTree(){ const m=new Map(); for(const r of S.recs.values()) if(r.treeId&&isOpenWR(r)) m.set(r.treeId,(m.get(r.treeId)||0)+1); return m; }
-function recsInOrder(woId){ const a=[]; for(const r of S.recs.values()) if(r.woId===woId) a.push(r);
+function openWRByTree(){ const m=new Map(); for(const r of S.recs.values()) if(r.treeId&&isOpenWR(r)&&sees(r)) m.set(r.treeId,(m.get(r.treeId)||0)+1); return m; }
+function recsInOrder(woId){ const a=[]; for(const r of S.recs.values()) if(r.woId===woId&&(sees(r)||isCrew())) a.push(r);
   return a.sort((x,y)=>((x.routeSeq??1e9)-(y.routeSeq??1e9))||String(x.address||"").localeCompare(String(y.address||""),undefined,{numeric:true})); }
 function sorter(k,asc){ return (a,b)=>{ let x=a[k], y=b[k]; const ex=x===undefined||x===null||x==="", ey=y===undefined||y===null||y==="";
   if(ex&&ey) return 0; if(ex) return 1; if(ey) return -1; if(typeof x==="number"&&typeof y==="number") return asc?x-y:y-x;
@@ -585,7 +618,7 @@ function doRender(){
   if(S.view==="trees") renderTrees();
   if(S.view==="work") renderWork();
   if(S.view==="requests") renderRequests();
-  if(S.view==="more"){ renderOverview(); renderData(); }
+  if(S.view==="more"){ if(!isCrew()) renderOverview(); renderData(); if(S._teamFor!==myUid()+S.view+SB.role){ S._teamFor=myUid()+S.view+SB.role; renderTeamAdmin(); } }
   refreshDynFilters();
   if($("treeList").childElementCount&&S._listN!==S.trees.size) $("treeList").innerHTML="";
   const ds=`${S.trees.size}|${S._ver||0}`; if(dots&&S._dotSig!==ds){ S._dotSig=ds; refreshDots(); drawMarkers(); }
@@ -671,6 +704,7 @@ function filteredRecords(forBoard){
   const q=$("rSearch").value.trim().toLowerCase(), fs=$("rStatus").value, fc=$("rCat").value, ft=$("rTask").value, fp=$("rPri").value, fw=$("rWO").value, ftr=$("rTrim").value;
   const out=[];
   for(const r of S.recs.values()){
+    if(!sees(r)) continue;
     if(!forBoard&&(fs==="open"?!isOpenWR(r):(fs&&r.status!==fs))) continue;
     if(fc&&catOf(r.task)!==fc&&r.category!==fc) continue; if(ft&&r.task!==ft) continue; if(fp&&r.priority!==fp) continue;
     if(fw==="none"&&r.woId) continue; if(fw&&fw!=="none"&&r.woId!==fw) continue;
@@ -702,7 +736,7 @@ function updateSelBar(){ $("selBar").classList.toggle("on",S.sel.size>0); $("sel
 function renderOrders(){
   const q=$("oSearch").value.trim().toLowerCase(), fs=$("oStatus").value;
   const counts=new Map(); for(const r of S.recs.values()) if(r.woId){ const c=counts.get(r.woId)||{n:0,d:0}; c.n++; if(!isOpenWR(r)) c.d++; counts.set(r.woId,c); }
-  const rows=[...S.ords.values()].filter(o=>(fs==="open"?isOpenWO(o):(!fs||o.status===fs))&&(!q||`${o.woNum} ${o.name} ${o.assignee} ${o.notes}`.toLowerCase().includes(q)))
+  const rows=[...S.ords.values()].filter(o=>seesOrder(o)&&(fs==="open"?isOpenWO(o):(!fs||o.status===fs))&&(!q||`${o.woNum} ${o.name} ${o.assignee} ${o.notes}`.toLowerCase().includes(q)))
     .sort((a,b)=>String(b.created||"").localeCompare(String(a.created||"")));
   $("ordCards").innerHTML=rows.length?rows.map(o=>{ const c=counts.get(o.id)||{n:0,d:0}; const col=WOSTAT_C[o.status]||"dead";
     return `<button class="card" data-wo="${esc(o.id)}" style="--c:${VAR(col)}"><span class="meta mono">WO ${esc(o.woNum)}</span><h3>${esc(o.name||"Untitled work order")}</h3>
@@ -873,7 +907,7 @@ async function openTree(id){
   const isNew=!id, t=isNew?{tag:nextTag(),status:"Active"}:S.trees.get(id); if(!t) return;
   const [insps,photos]=isNew?[[],[]]:await Promise.all([byTree("inspections",id),photosForTree(id)]);
   insps.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  const hist=isNew?[]:[...S.recs.values()].filter(r=>r.treeId===id).sort((a,b)=>(isOpenWR(b)-isOpenWR(a))||String(b.completed||b.created||"").localeCompare(String(a.completed||a.created||"")));
+  const hist=isNew?[]:[...S.recs.values()].filter(r=>r.treeId===id&&(sees(r)||!isOpenWR(r))).sort((a,b)=>(isOpenWR(b)-isOpenWR(a))||String(b.completed||b.created||"").localeCompare(String(a.completed||a.created||"")));
   const near=S.me&&t.lat!=null?` · ${fmtDist(distFt(S.me,t))} ${bearing(S.me,t)} of you`:"";
   const histRow=r=>`<div><span class="sec" style="display:inline;min-width:84px">${fdate(r.completed||r.created)}</span><span class="t" data-wr="${esc(r.id)}"><b>${esc(r.task||"Task")}</b><span class="sec">${esc([r.crew,r.equipment,r.hours?r.hours+" hrs":""].filter(Boolean).join(" · "))}</span></span>${chip(r.status,WRSTAT_C[r.status])}</div>`;
   openModal(`${hdr(isNew?"Add tree":`${esc(t.common||"Unidentified")} <span class="mono" style="font-size:15px;color:var(--muted)">#${esc(t.tag)}</span>`, isNew?"New inventory record":esc(t.address||"")+near)}
@@ -948,6 +982,7 @@ async function openTree(id){
     if(isNew) data.created=new Date().toISOString();
     try{ if(!isNew&&t.tag!==tag) tagIndex.delete(String(t.tag).toLowerCase()); await save("trees",data); toast(isNew?`#${tag} added`:`#${tag} saved`); openTree(data.id); }catch{}
   };
+  if($("treeDel")&&isCrew()) $("treeDel").remove();
   if($("treeDel")) armDelete($("treeDel"),async()=>{ await removeRec("trees",id); tagIndex.delete(String(t.tag).toLowerCase()); closeModal(); toast("Tree deleted"); });
 }
 
@@ -997,7 +1032,9 @@ async function openInspection(treeId, inspId, opt){
   $("i-cam").onclick=()=>$("i-camfile").click(); $("i-lib").onclick=()=>$("i-libfile").click();
   $("i-camfile").onchange=e=>{ addFiles([...e.target.files]); e.target.value=""; };
   $("i-libfile").onchange=e=>{ addFiles([...e.target.files]); e.target.value=""; };
-  if(ro){ armDelete($("inspDel"),async()=>{ await removeRec("inspections",inspId); openTree(treeId); });
+  if(ro&&isCrew()&&$("inspDel")) $("inspDel").remove();
+  if(ro&&$("inspDel")){ armDelete($("inspDel"),async()=>{ await removeRec("inspections",inspId); openTree(treeId); }); }
+  if(ro){
     $("i-savePh").onclick=async()=>{ const base=iphotos.length; await savePhotos(pending.map((d,k)=>({id:inspId+"-p"+(base+k)+"-"+Date.now().toString(36),treeId,inspId,date:i.date,data:d,updated:new Date().toISOString()})));
       await save("inspections",{...i,photoCount:(i.photoCount||0)+pending.length}); toast(`${pending.length} photo${pending.length>1?"s":""} added`); openInspection(treeId,inspId); };
     return; }
@@ -1032,7 +1069,7 @@ function newRecord(o){
   return {id:newId("r"),wrId:nextNum(S.recs,"wrId"),status:"Requested",task:o.task||"",category:catOf(o.task),priority:pri,
     treeId:o.treeId||null,treeTag:t?t.tag:"",address:o.address||(t?t.address:"")||"",common:t?t.common:"",lat:t?t.lat:(o.lat??null),lng:t?t.lng:(o.lng??null),
     crew:"",equipment:"",hours:null,created:today(),due:PRI_DAYS[pri]!=null?addDays(today(),PRI_DAYS[pri]):"",completed:"",description:o.description||"",
-    woId:o.woId||"",srId:o.srId||"",inspId:o.inspId||"",createdBy:me(),source:"app"};
+    woId:o.woId||"",srId:o.srId||"",inspId:o.inspId||"",createdBy:me(),createdById:myUid(),source:"app"};
 }
 function applyCompletion(r){
   const t=r.treeId&&S.trees.get(r.treeId); if(!t) return null; const d=r.completed||today(), k=r.task||""; let u=null;
@@ -1074,6 +1111,7 @@ function openRecord(id,init){
   </form>
   <footer>${isNew?"":`<button class="btn danger" id="wrDel">Delete</button>`}<span class="spacer"></span><button class="btn" id="mCancel">Cancel</button><button class="btn primary" id="wrSave">${isNew?"Create work record":"Save"}</button></footer>`);
   wireClose(); $("mCancel").onclick=()=>{ if(stack.length) stack.pop()(); else closeModal(); };
+  if(isCrew()){ ["w-pri","w-due","w-wo"].forEach(i=>$(i).disabled=true); if(!isNew) $("w-crew").readOnly=true; if($("wrDel")) $("wrDel").remove(); }
   if($("wrTree")) $("wrTree").onclick=()=>openTree(r.treeId);
   if($("wrWO")) $("wrWO").onclick=()=>openOrder(r.woId);
   if($("wrPdf")) $("wrPdf").onclick=()=>pdfRecord(S.recs.get(id)||r);
@@ -1133,6 +1171,7 @@ function openOrder(id){
   </div>
   <footer>${isNew?"":`<button class="btn danger" id="woDel">Delete</button>`}<span class="spacer"></span><button class="btn" id="mCancel">Close</button><button class="btn primary" id="woSave">${isNew?"Create work order":"Save"}</button></footer>`);
   wireClose(); $("mCancel").onclick=closeModal;
+  if(isCrew()){ ["o-name","o-assignee","o-pri","o-due","o-notes"].forEach(i=>$(i).disabled=true); ["woDel","woAdd"].forEach(i=>$(i)&&$(i).remove()); $("sheet").querySelectorAll("[data-unlink]").forEach(b=>b.remove()); }
   let status=o.status;
   $("o-status").addEventListener("click",e=>{ const b=e.target.closest("button[data-s]"); if(!b) return; status=b.dataset.s; $("o-status").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
   const collect=()=>({...o,status,name:$("o-name").value.trim(),assignee:$("o-assignee").value.trim(),priority:$("o-pri").value,due:$("o-due").value,notes:$("o-notes").value.trim(),closeout:$("o-close").value.trim()});
@@ -1412,7 +1451,19 @@ async function mergeFiles(files){
 
 
 /* ================= Team database (Supabase) ================= */
-const SB={client:null,user:null,outbox:new Map(),busy:false,timer:null,poll:null,status:"",lastErr:""};
+const SB={client:null,user:null,outbox:new Map(),busy:false,timer:null,poll:null,status:"",lastErr:"",role:"",crew:"",name:"",noProfiles:false,offline:false};
+(()=>{ try{ const p=JSON.parse(ls.get("sbProfile")||"null"); if(p){ SB.role=p.role||""; SB.crew=p.crew||""; SB.name=p.name||""; } }catch{} })();
+const isCrew=()=>sbConfigured()&&SB.role==="crew";
+const crewRe=()=>SB.crew?new RegExp(`(^|[^a-z0-9])${SB.crew.replace(/[^\w]/g,"")}([^a-z0-9]|$)`,"i"):null;
+function crewMatch(txt){ const re=crewRe(); return !!(re&&txt&&re.test(txt)); }
+const myUid=()=>SB.user?SB.user.id:"";
+const sees=r=>!isCrew()||crewMatch(r.crew)||(r.createdById&&r.createdById===myUid());
+const seesOrder=o=>!isCrew()||crewMatch(o.assignee);
+function applyRole(){
+  document.body.classList.toggle("crew",isCrew());
+  const wl=document.querySelector('nav.tabs a[data-view="work"]'); if(wl) wl.lastChild.textContent=isCrew()?"My work":"Work";
+  const chip=$("crewChip"); if(chip) chip.textContent=isCrew()?(SB.crew?`Crew ${SB.crew}`:"No crew code set"):"";
+  refreshDynFilters._s=""; render(); }
 const sbUrl=()=>(CONFIG.supabaseUrl||ls.get("sbUrl")||"").trim().replace(/\/+$/,"");
 const sbKey=()=>(CONFIG.supabaseKey||ls.get("sbKey")||"").trim();
 const sbConfigured=()=>!!(sbUrl()&&sbKey());
@@ -1428,13 +1479,40 @@ function loadScript(src){ return new Promise((res,rej)=>{ const s=document.creat
 async function sbClient(){ if(SB.client) return SB.client; if(!sbConfigured()) throw new Error("The team database isn't set up yet.");
   if(!window.supabase) await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js");
   SB.client=window.supabase.createClient(sbUrl(),sbKey(),{auth:{persistSession:true,autoRefreshToken:true,storageKey:"reno-trees-auth",detectSessionInUrl:false}});
-  SB.client.auth.onAuthStateChange((ev,session)=>{ const was=!!SB.user; SB.user=session?session.user:null; if(SB.user&&!was){ sbStartPolling(); sbSyncNow(false); } if(!SB.user) sbStopPolling(); renderTeam(); renderBanner(); sbBadge(); });
+  SB.client.auth.onAuthStateChange((ev,session)=>{ if(ev==="SIGNED_OUT"){ SB.user=null; sbStopPolling(); renderTeam(); renderBanner(); sbBadge(); return; }
+    if(session&&session.user){ const was=SB.offline; SB.user=session.user; if(was){ SB.offline=false; sbAfterAuth().then(()=>{ sbStartPolling(); sbSyncNow(false); }); } } sbBadge(); });
   return SB.client; }
+function showGate(on,msg){ const g=$("gate"); g.classList.toggle("hidden",!on); if(msg!=null) $("gMsg").textContent=msg;
+  if(on){ if(!$("gEmail").value) $("gEmail").value=ls.get("sbEmail")||""; setTimeout(()=>{ try{ ($("gEmail").value?$("gPass"):$("gEmail")).focus(); }catch{} },50); } }
 async function sbInit(){
   try{ const m=await tx("meta","readonly",st=>st.get("outbox")); if(m&&m.v) m.v.forEach(([st,id])=>SB.outbox.set(st+"|"+id,[st,id])); }catch{}
-  sbBadge(); if(!sbConfigured()){ renderTeam(); return; }
-  try{ const c=await sbClient(); const {data}=await c.auth.getSession(); SB.user=data&&data.session?data.session.user:null; }catch(e){ SB.lastErr=e.message; }
-  renderTeam(); renderBanner(); sbBadge(); if(SB.user){ sbStartPolling(); sbSyncNow(false); }
+  sbBadge(); if(!sbConfigured()){ showGate(false); renderTeam(); return; }
+  const cached=(()=>{ try{ return JSON.parse(ls.get("sbUser")||"null"); }catch{ return null; } })();
+  if(cached) showGate(false); else showGate(true,"Loading…");
+  let err=null;
+  try{ const c=await sbClient(); const {data,error}=await c.auth.getSession(); err=error; SB.user=data&&data.session?data.session.user:null; }catch(e){ err=e; SB.lastErr=e.message; }
+  if(!SB.user&&cached&&(navigator.onLine===false||err)){ SB.user=cached; SB.offline=true; }   // keep working in the field without signal
+  if(!SB.user){ applyRole(); showGate(true,navigator.onLine===false?"You're offline. Connect to the internet to sign in the first time on this device.":"Sign in with the email and password your administrator set up."); renderTeam(); sbBadge(); return; }
+  showGate(false); applyRole(); renderTeam(); renderBanner(); sbBadge();
+  if(!SB.offline){ await sbAfterAuth(); sbStartPolling(); sbSyncNow(false); }
+}
+async function sbLoadProfile(){
+  const c=SB.client; const {data,error}=await c.from("profiles").select("role,crew_code,name,email").eq("user_id",myUid()).maybeSingle();
+  if(error){ if(/does not exist|schema cache|relation/i.test(error.message)){ SB.noProfiles=true; return {role:"admin",crew:"",name:""}; } throw error; }
+  SB.noProfiles=false;
+  return data?{role:data.role||"crew",crew:(data.crew_code||"").trim(),name:data.name||""}:{role:"crew",crew:"",name:""};
+}
+async function sbAfterAuth(){
+  try{ const p=await sbLoadProfile(); const prevUid=ls.get("sbLastUid")||"", prevRole=ls.get("sbRoleApplied")||"", prevCrew=ls.get("sbCrewApplied")||"";
+    SB.role=p.role; SB.crew=p.crew; SB.name=p.name; ls.set("sbProfile",JSON.stringify(p));
+    ls.set("sbUser",JSON.stringify({id:SB.user.id,email:SB.user.email}));
+    const switched=(prevUid&&prevUid!==myUid())||(SB.role==="crew"&&(prevRole!=="crew"||prevCrew!==SB.crew));
+    if(switched&&(S.trees.size||S.recs.size)){   // new person or narrower access on this device: start clean, then download what this account may see
+      if(SB.outbox.size){ try{ await sbPush(); }catch{} }
+      for(const st of [...STORES,"photos"]) await clearStore(st); SB.outbox.clear(); await put("meta",{k:"outbox",v:[]}); ls.set("sbPulled",""); await loadAll(); }
+    ls.set("sbLastUid",myUid()); ls.set("sbRoleApplied",SB.role); ls.set("sbCrewApplied",SB.crew);
+  }catch(e){ console.warn("profile",e); }
+  applyRole(); renderTeam(); if(S.view==="more") renderTeamAdmin();
 }
 function sbStartPolling(){ sbStopPolling(); SB.poll=setInterval(()=>{ if(document.visibilityState==="visible") sbSyncNow(false); },20000); }
 function sbStopPolling(){ if(SB.poll) clearInterval(SB.poll); SB.poll=null; }
@@ -1501,25 +1579,53 @@ function renderTeam(){
     el.innerHTML=`<form id="sbForm" class="stackv"><label class="f">Email<input type="email" id="sbEmail" autocomplete="username" value="${esc(ls.get("sbEmail")||"")}"></label>
       <label class="f">Password<input type="password" id="sbPass" autocomplete="current-password"></label>
       <button class="btn primary" id="sbLogin" type="submit">Sign in</button></form><div class="note" id="sbMsg">${esc(SB.lastErr||"Use the email and password your administrator set up in Supabase.")}</div>`;
-    $("sbForm").onsubmit=e=>{ e.preventDefault(); sbSignIn(); }; return; }
+    $("sbForm").onsubmit=e=>{ e.preventDefault(); sbSignIn($("sbEmail").value,$("sbPass").value,$("sbMsg"),$("sbLogin")); }; return; }
   const last=ls.get("sbLastSync");
   if(el.dataset.mode==="in"&&$("sbMsg")){ if(!SB.busy) $("sbMsg").textContent=(SB.status||(last?`Last synced ${new Date(last).toLocaleString()}.`:"Not synced yet."))+(SB.outbox.size?` ${SB.outbox.size.toLocaleString()} change${SB.outbox.size===1?"":"s"} waiting to upload.`:""); return; }
   el.dataset.mode="in";
-  el.innerHTML=`<div class="note">Signed in as <b>${esc(SB.user.email||"")}</b>. Changes sync automatically when you're online.</div>
+  el.innerHTML=`<div class="note">Signed in as <b>${esc(SB.user.email||"")}</b> · ${isCrew()?`crew${SB.crew?" "+esc(SB.crew):" (no crew code yet, so no work shows)"}`:"admin"}${SB.noProfiles?" (crew mode isn't set up in the database yet)":""}. Changes sync automatically when you're online.</div>
     <button class="btn primary" id="sbNow">Sync now</button><div class="progress hidden" id="sbProg"><span></span></div>
     <div class="note" id="sbMsg">${esc(SB.status||(last?`Last synced ${new Date(last).toLocaleString()}.`:"Not synced yet."))}${SB.outbox.size?` ${SB.outbox.size.toLocaleString()} change${SB.outbox.size===1?"":"s"} waiting to upload.`:""}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="sbFull">Re-download everything</button><button class="btn small" id="sbOut">Sign out</button></div>`;
-  $("sbNow").onclick=()=>sbSyncNow(true); $("sbFull").onclick=()=>{ ls.set("sbPulled",""); toast("Downloading everything from the team database…"); sbSyncNow(true); }; $("sbOut").onclick=async()=>{ await SB.client.auth.signOut(); SB.user=null; el.dataset.mode=""; renderTeam(); renderBanner(); sbBadge(); };
+  $("sbNow").onclick=()=>sbSyncNow(true); $("sbFull").onclick=()=>{ ls.set("sbPulled",""); toast("Downloading everything from the team database…"); sbSyncNow(true); }; $("sbOut").onclick=sbSignOut;
 }
-async function sbSignIn(){
-  const email=$("sbEmail").value.trim().toLowerCase(), password=$("sbPass").value;
-  if(!/^\S+@\S+\.\S+$/.test(email)){ $("sbMsg").textContent="Enter your email address."; return; }
-  if(!password){ $("sbMsg").textContent="Enter your password."; return; }
-  $("sbLogin").disabled=true; $("sbMsg").textContent="Signing in…";
+async function sbSignIn(email,password,msgEl,btn){
+  email=(email||"").trim().toLowerCase();
+  if(!/^\S+@\S+\.\S+$/.test(email)){ msgEl.textContent="Enter your email address."; return false; }
+  if(!password){ msgEl.textContent="Enter your password."; return false; }
+  if(navigator.onLine===false){ msgEl.textContent="You're offline. Connect to the internet to sign in."; return false; }
+  btn.disabled=true; msgEl.textContent="Signing in…";
   try{ const c=await sbClient(); const {data,error}=await c.auth.signInWithPassword({email,password});
-    if(error) throw new Error(/invalid login|invalid credentials/i.test(error.message)?"That email and password don't match. Check with your administrator.":/not confirmed/i.test(error.message)?"This account isn't confirmed yet. In Supabase, delete and re-create the user with “Auto Confirm User” ticked.":error.message);
-    ls.set("sbEmail",email); SB.user=data.user; SB.lastErr=""; $("sbBody").dataset.mode=""; toast("Signed in"); renderTeam(); renderBanner(); sbStartPolling(); sbSyncNow(false);
-  }catch(e){ $("sbMsg").textContent=e.message; $("sbLogin").disabled=false; }
+    if(error) throw new Error(/invalid login|invalid credentials/i.test(error.message)?"That email and password don't match. Check with your administrator.":/not confirmed/i.test(error.message)?"This account isn't confirmed yet. Ask your administrator to re-create it with “Auto Confirm User” ticked.":error.message);
+    ls.set("sbEmail",email); SB.user=data.user; SB.offline=false; SB.lastErr=""; msgEl.textContent="Loading your work…";
+    await sbAfterAuth(); showGate(false); btn.disabled=false; $("gPass").value="";
+    const el=$("sbBody"); if(el) el.dataset.mode=""; renderTeam(); renderBanner(); route(); sbStartPolling(); sbSyncNow(false); toast(isCrew()?`Signed in · crew ${SB.crew||"(no code yet)"}`:"Signed in"); return true;
+  }catch(e){ msgEl.textContent=e.message; btn.disabled=false; return false; }
+}
+async function renderTeamAdmin(){
+  const box=$("teamList"); if(!box||isCrew()) return; if(!sbConfigured()||!SB.user||SB.offline){ box.innerHTML=`<div class="note">Sign in while online to manage the team.</div>`; return; }
+  if(box.dataset.loading) return; box.dataset.loading="1";
+  try{ const {data,error}=await SB.client.from("profiles").select("user_id,email,name,role,crew_code").order("email");
+    if(error){ box.innerHTML=`<div class="note">${/does not exist|schema cache|relation/i.test(error.message)?"Crew mode isn't set up in the database yet. Run the crew-mode script from the README in the Supabase SQL Editor, then reload.":esc(error.message)}</div>`; return; }
+    const codes=new Map(); for(const r of S.recs.values()) if(r.crew&&isOpenWR(r)) String(r.crew).split(/[^A-Za-z0-9]+/).filter(Boolean).forEach(c=>{ c=c.toUpperCase(); codes.set(c,(codes.get(c)||0)+1); });
+    const top=[...codes.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
+    box.innerHTML=(data||[]).map(p=>`<div class="trow" data-uid="${esc(p.user_id)}"><span class="em">${esc(p.email||p.user_id)}</span>
+      <label class="f">Name<input type="text" data-k="name" value="${esc(p.name||"")}"></label>
+      <label class="f">Role<select data-k="role"><option value="admin"${p.role==="admin"?" selected":""}>Admin</option><option value="crew"${p.role==="crew"?" selected":""}>Crew</option></select></label>
+      <label class="f">Crew code<input type="text" data-k="crew_code" value="${esc(p.crew_code||"")}" placeholder="e.g. LP"></label>
+      <button class="btn small" data-tsave="${esc(p.user_id)}">Save</button></div>`).join("")||`<div class="note">No team members found. Add users in Supabase → Authentication → Users.</div>`;
+    $("teamMsg").innerHTML=top.length?`Crew codes on open work right now: ${top.map(([c,n])=>`<b>${esc(c)}</b> (${n})`).join(", ")}. New users appear here after they're added in Supabase.`:"New users appear here after they're added in Supabase → Authentication → Users.";
+    box.querySelectorAll("[data-tsave]").forEach(btn=>btn.onclick=async()=>{ const row=btn.closest(".trow"); const v=k=>row.querySelector(`[data-k="${k}"]`).value.trim();
+      btn.disabled=true; const {error}=await SB.client.from("profiles").update({name:v("name"),role:v("role"),crew_code:v("crew_code").toUpperCase()}).eq("user_id",btn.dataset.tsave);
+      btn.disabled=false; if(error) toast("Couldn't save: "+error.message); else { toast("Saved"); if(btn.dataset.tsave===myUid()){ await sbAfterAuth(); } } });
+  }catch(e){ box.innerHTML=`<div class="note">${esc(e.message)}</div>`; }
+  finally{ delete box.dataset.loading; }
+}
+async function sbSignOut(){
+  if(SB.outbox.size&&navigator.onLine!==false){ try{ await sbPush(); }catch{} }
+  try{ if(SB.client) await SB.client.auth.signOut(); }catch{}
+  SB.user=null; SB.offline=false; ls.set("sbUser",""); sbStopPolling(); const el=$("sbBody"); if(el) el.dataset.mode="";
+  renderTeam(); renderBanner(); sbBadge(); showGate(true,"Signed out. Sign in to continue.");
 }
 
 /* ================= PDFs ================= */
@@ -1776,7 +1882,8 @@ $("flagBtn").onclick=flagStart; $("plantBtn").onclick=()=>openPlant({});
 $("nColor").addEventListener("input",()=>{ refreshDots(); });
 $("mapBig").onclick=()=>{ const big=$("map").classList.toggle("big"); $("mapBig").textContent=big?"Smaller map":"Larger map"; if(map) setTimeout(()=>map.invalidateSize(),50); };
 $("selRoute").onclick=()=>{ if(S.sel.size<2){ toast("Select at least two work records"); return; } openRoute([...S.sel]); };
-$("hdrSync").onclick=()=>sbSyncNow(true);
+$("hdrSync").onclick=()=>{ if(!SB.user&&sbConfigured()) showGate(true,"Sign in to sync."); else sbSyncNow(true); };
+$("gForm").addEventListener("submit",e=>{ e.preventDefault(); sbSignIn($("gEmail").value,$("gPass").value,$("gMsg"),$("gLogin")); });
 ["sbUrlIn","sbKeyIn"].forEach(i=>$(i).addEventListener("change",()=>{ ls.set("sbUrl",$("sbUrlIn").value.trim()); ls.set("sbKey",$("sbKeyIn").value.trim()); SB.client=null; sbInit(); }));
 
 $("sendChg").onclick=sendChanges; $("mergeBtn").onclick=()=>$("mergeFile").click();
@@ -1819,7 +1926,8 @@ document.addEventListener("focusin",e=>{ if(e.target.id==="w-tree"&&!$("treeList
 
 function route(){
   let h=(location.hash||"").slice(1); if(h==="work-orders"){ h="work"; S.workMode="orders"; }
-  const v=["nearby","trees","work","requests","more"].includes(h)?h:(S.trees.size?"nearby":"more");
+  if(isCrew()&&h==="requests") h="work";
+  const v=["nearby","trees","work","requests","more"].includes(h)?h:(isCrew()?"work":S.trees.size?"nearby":"more");
   S.view=v; document.querySelectorAll(".view").forEach(el=>el.classList.toggle("hidden",el.id!=="view-"+v));
   document.querySelectorAll("nav.tabs a").forEach(a=>{ if(a.dataset.view===v) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
   if(v==="work") setWorkMode(S.workMode); else render();
@@ -1832,7 +1940,7 @@ async function loadAll(){
 }
 (async()=>{
   try{ DB=await openDB(); await loadAll(); }catch(e){ $("banner").innerHTML=`<div class="warn">This browser can't store data (private browsing may block it). Open the app in a normal browser window.</div>`; }
-  S.ready=true; route(); sbInit();
+  S.ready=true; applyRole(); route(); sbInit();
   if("serviceWorker" in navigator&&location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
 })();

@@ -47,6 +47,21 @@ Everyone signed in shares the same trees, work records, work orders, requests, i
 
 **Free plan notes:** 500 MB of database (the full inventory is about 40 MB) and 1 GB of photos (about 3,000 field photos). The project pauses after 7 days with no activity. If that happens, open the Supabase dashboard and click **Restore project**; no data is lost.
 
+**Sign-in:** the app opens to a sign-in screen. Once someone has signed in on a device, they stay signed in, including offline in the field, until they tap **Sign out** on the More tab.
+
+### Crew mode
+
+Crew accounts see the tree inventory, the map and Nearby. They also see **only the work records and work orders whose Crew or Assigned to field includes their crew code**, plus anything they flag themselves. They can inspect, flag, plant, update status, hours and notes, and make crew sheets and routes. They don't see service requests, other crews' work, imports, exports or team settings. The database enforces this, not just the screen.
+
+**One-time setup:** in Supabase → **SQL Editor → New query**, paste the contents of [`supabase/crew-mode.sql`](supabase/crew-mode.sql) and click **Run**. Everyone who already has an account starts as an **admin**.
+
+**Making someone a crew member:**
+1. Add them in Supabase (Authentication → Users → Add user, as above).
+2. In the app, signed in as an admin, go to **More → Team & crews**. Find their email, set **Role** to **Crew** and **Crew code** to the initials used in the Crew field (for example `LP`), then click **Save**. The panel lists the crew codes currently on open work.
+3. They sign in on their phone and see **My work**.
+
+Assigning work to a crew: put their code in a work record's **Crew** field (for example `LP, PC` reaches both LP and PC), or in a work order's **Assigned to** field. Assigning a work order also fills the Crew field on its records.
+
 **If something looks out of step:** More → Team database → **Re-download everything**.
 
 ## 4. Or work without the team database
@@ -106,7 +121,7 @@ Only records changed since the last send are included, along with their photos. 
 
 ## Updating the app
 
-When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v4` → `reno-trees-v5`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
+When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v5` → `reno-trees-v6`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
 
 ## Notes
 
