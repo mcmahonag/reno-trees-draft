@@ -441,7 +441,7 @@ td.ck input{width:22px;height:22px}
 (() => {
 "use strict";
 /* ===== SETUP: paste the Google OAuth client ID here (Web application type). See README. ===== */
-const CONFIG = { googleClientId: "" };
+const CONFIG = { googleClientId: "", driveFolder: "https://drive.google.com/drive/folders/1k3cbexc7Jzobt7oo35jNdtWwnmzG1em6" };
 /* ================= vocabularies (from Reno's TreePlotter) ================= */
 const COND = ["Excellent","Good","Fair","Poor","Dead","Volunteer","Champion"];
 const COND_C = {Excellent:"good",Good:"good",Fair:"info",Poor:"warn",Dead:"crit",Volunteer:"dead",Champion:"acc"};
@@ -768,7 +768,7 @@ async function renderData(){
   if(document.activeElement!==$("inspectorName")) $("inspectorName").value=me();
   if(document.activeElement!==$("deviceName")) $("deviceName").value=ls.get("deviceName")||"";
   if(document.activeElement!==$("gClientId")) $("gClientId").value=ls.get("gClientId")||CONFIG.googleClientId||"";
-  if(document.activeElement!==$("gFolder")) $("gFolder").value=ls.get("gFolder")||"";
+  if(document.activeElement!==$("gFolder")) $("gFolder").value=ls.get("gFolder")||CONFIG.driveFolder||"";
   if(CONFIG.googleClientId) $("gdIdBox").classList.add("hidden");
   if(!$("gdMsg").textContent){ const t=ls.get("gLastSync:"+gdFolder()); if(gdReady()&&ls.get("gConnected")) $("gdMsg").textContent=t?`Last synced ${new Date(t).toLocaleString()}.`:"Connected. Not synced yet on this device."; }
   let m=`${S.trees.size.toLocaleString()} trees, ${S.recs.size.toLocaleString()} work records, ${S.ords.size} work orders, ${S.reqs.size} service requests and ${S.insp.size} inspections on this device.`;
@@ -1417,7 +1417,7 @@ async function mergeFiles(files){
 const GD={token:null,exp:0};
 const gdClientId=()=>(ls.get("gClientId")||CONFIG.googleClientId||"").trim();
 function parseFolder(v){ v=String(v||"").trim(); const m=/folders\/([\w-]+)/.exec(v)||/[?&]id=([\w-]+)/.exec(v); return m?m[1]:v.replace(/[^\w-]/g,""); }
-const gdFolder=()=>parseFolder(ls.get("gFolder")||"");
+const gdFolder=()=>parseFolder(ls.get("gFolder")||CONFIG.driveFolder||"");
 const gdReady=()=>!!(gdClientId()&&gdFolder());
 function gdMsg(t,html){ const el=$("gdMsg"); if(!el) return; if(html) el.innerHTML=t; else el.textContent=t; }
 function gdProg(frac){ const p=$("gdProg"); if(frac==null){ p.classList.add("hidden"); return; } p.classList.remove("hidden"); p.firstElementChild.style.width=Math.round(frac*100)+"%"; }

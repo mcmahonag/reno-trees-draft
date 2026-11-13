@@ -52,7 +52,7 @@ Drive lets every device load the TreePlotter exports from one folder and share f
 2. Upload the TreePlotter CSV exports: trees, work records, work orders, tree inspections and service requests.
 3. Copy the folder's link.
 
-**On each device:** go to **More → Google Drive**, paste the folder link, tap **Connect Google Drive** and sign in. Then tap **Update inventory from Drive**.
+**On each device:** go to **More → Google Drive**. The folder link is preset in `CONFIG.driveFolder` in `index.html`; change it there if the folder moves. Tap **Connect Google Drive** and sign in. Then tap **Update inventory from Drive**.
 
 **Day to day:**
 - **Sync** (top of the screen, or **More → Sync changes now**) uploads this device's changes and photos to an `app-sync` subfolder and pulls in everyone else's. Where the same record was edited on two devices, the newer edit wins.
