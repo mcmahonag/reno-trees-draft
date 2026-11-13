@@ -1,6 +1,6 @@
 // Offline support for Reno Tree Inventory.
 // Bump VERSION whenever index.html changes so phones pick up the new app.
-const VERSION = "reno-trees-v3";
+const VERSION = "reno-trees-v4";
 const SHELL = [
   "./",
   "index.html",
@@ -10,7 +10,8 @@ const SHELL = [
   "icons/apple-touch-icon.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
 ];
 
 self.addEventListener("install", e => {
@@ -30,11 +31,11 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Map tiles: always from the network (too many to store offline).
-  if (url.hostname.endsWith("tile.openstreetmap.org")) return;
+  // Map tiles and the team database: always straight to the network.
+  if (url.hostname.endsWith("tile.openstreetmap.org") || url.hostname.endsWith("supabase.co")) return;
 
   // Libraries from the CDN: cache first, they never change at a pinned version.
-  if (url.hostname === "cdnjs.cloudflare.com") {
+  if (url.hostname === "cdnjs.cloudflare.com" || url.hostname === "cdn.jsdelivr.net") {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
       const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); return res;
     })));

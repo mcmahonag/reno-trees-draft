@@ -8,7 +8,7 @@ A phone, tablet and desktop app for City of Reno Urban Forestry, built around th
 - **Service requests:** Reno Direct, park maintainer and code enforcement requests.
 - **Inspections:** with photos.
 
-It works without signal. Everything is stored **on the device**. There are no accounts and no server, and none of the city's data is in this repository.
+It works without signal. Each device keeps a full copy of the data and syncs it through a private team database (Supabase). None of the city's data is in this repository.
 
 ---
 
@@ -28,40 +28,28 @@ It works without signal. Everything is stored **on the device**. There are no ac
 
 Open it once with signal so the map and PDF tools are saved for offline use.
 
-## 3. Connect Google Drive (recommended)
+## 3. Team database (Supabase)
 
-Drive lets every device load the TreePlotter exports from one folder and share field changes without emailing files.
+Everyone signed in shares the same trees, work records, work orders, requests, inspections and photos. The app still works offline. Changes upload a few seconds after you save, and other people's changes arrive within about 20 seconds while the app is open. The **Sync** button at the top shows the status: *Synced*, *3 to sync* or *Offline*.
 
-**One-time Google Cloud setup (about 15 minutes):**
-1. Go to https://console.cloud.google.com/ and create a project, for example "Reno Trees".
-2. Open **APIs & Services → Library**, search for **Google Drive API** and click **Enable**.
-3. Open **APIs & Services → OAuth consent screen** (also called **Google Auth Platform**):
-   - User type: **External**, unless everyone is on the same Google Workspace, in which case use **Internal**.
-   - Fill in the app name and your email.
-   - Leave the publishing status at **Testing**, and under **Test users / Audience** add every Google account that will use the app.
-4. Open **APIs & Services → Credentials → Create credentials → OAuth client ID**:
-   - Application type: **Web application**.
-   - **Authorized JavaScript origins:** add `https://YOUR-USERNAME.github.io`. Use the origin only, with no repo path.
-   - Click **Create** and copy the **Client ID**. It ends in `.apps.googleusercontent.com`.
-5. Put the client ID in the app, choosing one of:
-   - **For everyone:** edit `index.html`. Near the top of the script, set `const CONFIG = { googleClientId: "PASTE-HERE" };`, then commit. The client ID isn't a secret, so it's fine in a public repo.
-   - **For testing:** paste it on one device under **More → Google Drive → Google client ID**.
+**Already set up for this repo:** the project URL and publishable key are in `index.html`, in the `CONFIG` line near the top of the script. Both are meant to be public. The data is protected by sign-in and the database's row-level security policies.
 
-**The Drive folder:**
-1. Create a folder in Google Drive, for example "Reno Trees – app data". Share it only with the people who use the app.
-2. Upload the TreePlotter CSV exports: trees, work records, work orders, tree inspections and service requests.
-3. Copy the folder's link.
+**Adding or removing people (Supabase dashboard):**
+- **Add:** Authentication → Users → **Add user → Create new user**. Enter their email and a password, tick **Auto Confirm User**, then click Create. Give them the email and password.
+- **Remove or change a password:** Authentication → Users → click the user → **Delete user**, then re-create them if needed.
+- New sign-ups are turned off, so only people you add can get in.
 
-**On each device:** go to **More → Google Drive**. The folder link is preset in `CONFIG.driveFolder` in `index.html`; change it there if the folder moves. Tap **Connect Google Drive** and sign in. Then tap **Update inventory from Drive**.
+**First load:**
+1. On one computer, sign in (**More → Team database**) and import the TreePlotter CSV exports (**More → Import from TreePlotter**). Everything uploads to the team database, which takes about 20 seconds for the full inventory.
+2. On every other device, just sign in. The whole inventory downloads automatically, in about 10–30 seconds depending on the connection.
 
-**Day to day:**
-- **Sync** (top of the screen, or **More → Sync changes now**) uploads this device's changes and photos to an `app-sync` subfolder and pulls in everyone else's. Where the same record was edited on two devices, the newer edit wins.
-- Each sync also rewrites **"Work status (from app).csv"** in the folder. It lists open work records, work completed in the last 90 days and anything changed in the app, so the office can open it in Google Sheets.
-- When you drop newer TreePlotter exports into the folder, tap **Update inventory from Drive**. Only files that changed are downloaded.
-- Sign-in lasts about an hour. After that, the next sync asks you to tap through Google sign-in again.
-- If the app says the sign-in window was blocked, allow pop-ups for the site.
+**Later TreePlotter exports:** import them on one device. Only the changed records are uploaded, and everyone gets them.
 
-## 4. Or load the data by hand (no Drive)
+**Free plan notes:** 500 MB of database (the full inventory is about 40 MB) and 1 GB of photos (about 3,000 field photos). The project pauses after 7 days with no activity. If that happens, open the Supabase dashboard and click **Restore project**; no data is lost.
+
+**If something looks out of step:** More → Team database → **Re-download everything**.
+
+## 4. Or work without the team database
 
 Export these layers from TreePlotter as CSV: **trees**, **work records**, **work orders**, **tree inspections** and **service requests**.
 
@@ -101,9 +89,9 @@ Completing a record updates the tree. Pruning sets the last-pruned date, a remov
 
 ---
 
-## Keeping a phone and a desktop in step without Drive
+## Moving data by file (without the team database)
 
-With Google Drive connected, use **Sync** (see section 3). Without it, move changes by file:
+With the team database, everything syncs on its own (see section 3). Without it, move changes by file:
 
 1. On the device with new work (usually the phone): **More** → **Send my changes**. Share the file by email, AirDrop, Drive or OneDrive.
 2. On the other device: **More** → **Merge changes or a backup**, then pick the file.
@@ -118,7 +106,7 @@ Only records changed since the last send are included, along with their photos. 
 
 ## Updating the app
 
-When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v2` → `reno-trees-v3`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
+When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v4` → `reno-trees-v5`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
 
 ## Notes
 
