@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2c6a43">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Reno Trees">
+<title>Reno Tree Inventory</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Field console: mobile-first. Bottom tab bar on phones, top tabs on wider screens.
+   Every record opens in one modal sheet; big tap targets for gloved hands. */
+:root{
+  --bg:#f2f3ef; --surface:#ffffff; --surface-2:#f6f7f4; --ink:#1b231f; --muted:#5d6962; --line:#d8ddd6;
+  --accent:#2c6a43; --accent-ink:#ffffff; --accent-soft:#e2eee5;
+  --good:#2f7d4a; --warn:#a96d12; --crit:#b3362e; --info:#356a9f; --dead:#6a6d6b;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --display:"Arial Narrow","Roboto Condensed",var(--body);
+  --radius:8px; --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121715; --surface:#1a211e; --surface-2:#1f2723; --ink:#e4eae5; --muted:#98a59d; --line:#2e3833;
+    --accent:#6dbd88; --accent-ink:#0e1912; --accent-soft:#1f3328;
+    --good:#5bbd7b; --warn:#e0a84a; --crit:#ee6a5e; --info:#7aa8dc; --dead:#a2a6a3;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;letter-spacing:.005em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+td,.tile b,.num{font-variant-numeric:tabular-nums}
+
+.top{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--line);padding-top:var(--safe-t)}
+.top-inner{max-width:1280px;margin:0 auto;padding:10px 16px;display:flex;gap:16px;align-items:center}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand h1{font-size:20px;line-height:1.05}
+.brand small{display:block;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-family:var(--body)}
+nav.tabs{display:flex;gap:4px;margin-left:auto}
+nav.tabs a{font-weight:600;text-decoration:none;color:var(--muted);padding:8px 12px;border-radius:var(--radius);display:flex;align-items:center;gap:6px}
+nav.tabs a:hover{color:var(--ink);background:var(--surface-2)}
+nav.tabs a[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+nav.tabs svg{width:20px;height:20px}
+@media (max-width:760px){
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;margin:0;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + var(--safe-b));justify-content:space-around;z-index:60}
+  nav.tabs a{flex-direction:column;gap:2px;font-size:11px;padding:6px 4px;flex:1;text-align:center}
+  body{padding-bottom:calc(68px + var(--safe-b))}
+}
+@media (min-width:761px){ nav.tabs svg{display:none} }
+
+main{max-width:1280px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.banner{display:grid;gap:8px}
+.banner > div{border:1px solid color-mix(in srgb,var(--info) 40%,var(--line));background:color-mix(in srgb,var(--info) 9%,var(--surface));padding:12px 14px;border-radius:var(--radius);font-size:15px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.banner > div.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:grid;gap:2px}
+.tile b{font-family:var(--display);font-size:30px;line-height:1.05}
+.tile span{color:var(--muted);font-size:13px}
+.tile.t-crit{border-left-color:var(--crit)} .tile.t-crit b{color:var(--crit)}
+.tile.t-warn{border-left-color:var(--warn)} .tile.t-acc{border-left-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:grid;gap:12px;align-content:start}
+.panel h2{font-size:20px}
+.sub{color:var(--muted);font-size:13px;margin-top:-6px}
+.stack{display:flex;height:20px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+.stack span{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.bars{display:grid;gap:7px}
+.bar{display:grid;grid-template-columns:minmax(100px,160px) 1fr 52px;gap:10px;align-items:center;font-size:14px}
+.bar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .trk{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.bar .trk span{display:block;height:100%;background:var(--accent)}
+.bar .trk span.over{background:var(--warn)}
+.bar .v{text-align:right;color:var(--muted);font-size:13px}
+.note{font-size:13px;color:var(--muted)}
+.empty{color:var(--muted);font-size:15px;padding:8px 0}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar h2{font-size:24px;margin-right:auto}
+.count{color:var(--muted);font-size:14px;font-family:var(--body);font-weight:400;margin-left:6px}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+input[type=search],input[type=text],input[type=number],input[type=date],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:9px 11px;min-height:44px;font-size:16px}
+input[type=search]{flex:1 1 240px}
+.filters select{flex:1 1 160px}
+textarea{width:100%;resize:vertical;min-height:80px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;color:inherit;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);padding:9px 16px;min-height:44px;cursor:pointer;font-weight:600;white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:var(--muted)}
+.btn.primary,a.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--crit)}
+.btn.danger.armed{background:var(--crit);border-color:var(--crit);color:#fff}
+.btn.small{padding:4px 10px;min-height:34px;font-size:14px}
+.btn.big{min-height:52px;font-size:17px}
+.btn:disabled{opacity:.55;cursor:default}
+
+/* table → cards on phones */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap;cursor:pointer;user-select:none}
+th.sorted::after{content:" ▾"} th.sorted.asc::after{content:" ▴"}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px}
+.sec{display:block;color:var(--muted);font-size:13px}
+td.r{text-align:right}
+@media (max-width:760px){
+  thead{display:none}
+  table,tbody{display:block}
+  tbody tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  tbody tr:last-child{border-bottom:0}
+  td{padding:0;border:0}
+  td[data-c="hide"]{display:none}
+  td[data-c="full"]{grid-column:1/-1}
+  td.r{text-align:left}
+}
+
+.chip{display:inline-block;font-size:12.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;--c:var(--muted);color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 30%,transparent)}
+.c-good{--c:var(--good)} .c-warn{--c:var(--warn)} .c-crit{--c:var(--crit)} .c-info{--c:var(--info)} .c-dead{--c:var(--dead)} .c-acc{--c:var(--accent)}
+.pri{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:14px}
+.pri::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--c,var(--muted))}
+.overdue{color:var(--crit);font-weight:700}
+
+.attn{display:grid}
+.attn button{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center;padding:10px 4px;border-top:1px solid var(--line)}
+.attn button:first-child{border-top:0}
+.attn .m{font-size:13px;color:var(--muted)}
+
+/* nearby */
+#map{height:46vh;min-height:280px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface-2);z-index:1}
+.near{display:grid;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.near button{all:unset;cursor:pointer;display:grid;grid-template-columns:62px 1fr auto;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid var(--line)}
+.near button:first-child{border-top:0}
+.near .d{font-weight:700;font-variant-numeric:tabular-nums}
+.near .d small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.gps{font-size:13px;color:var(--muted)}
+.me-dot{width:16px;height:16px;border-radius:50%;background:#2a7de1;border:3px solid #fff;box-shadow:0 0 0 2px rgba(42,125,225,.35)}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.45);display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding:max(3vh,var(--safe-t)) 10px calc(20px + var(--safe-b))}
+.modal[hidden]{display:none}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:12px;width:min(820px,100%);box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.sheet header{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.sheet header h2{font-size:24px}
+.sheet header .meta{color:var(--muted);font-size:13px}
+.sheet header .x{margin-left:auto}
+.sheet .body{padding:16px;display:grid;gap:16px}
+.sheet footer{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface-2);border-radius:0 0 12px 12px;position:sticky;bottom:0}
+.sheet footer .spacer{margin-right:auto}
+fieldset{border:0;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+legend{font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding:0}
+.f{display:grid;gap:4px;font-size:13px;color:var(--muted);font-weight:600}
+.f.wide{grid-column:1/-1}
+.f input,.f select,.f textarea{color:var(--ink);width:100%;font-weight:400}
+.check{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--ink);min-height:44px}
+.check input{width:22px;height:22px}
+.segs{display:flex;flex-wrap:wrap;gap:6px}
+.segs button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;min-height:40px;cursor:pointer;font-size:15px}
+.segs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 12px}
+.quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.history{display:grid;border:1px solid var(--line);border-radius:var(--radius)}
+.history > *{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:14px}
+.history > *:first-child{border-top:0}
+.history button{all:unset;cursor:pointer;display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:14px}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.photos img{width:88px;height:88px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer}
+.photos .ph{position:relative}
+.photos .ph button{position:absolute;top:2px;right:2px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer;line-height:1}
+.err{color:var(--crit);font-size:14px}
+.toast{position:fixed;bottom:calc(84px + var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--radius);font-size:15px;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+.toast.on{opacity:1}
+.hidden{display:none !important}
+.datagrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.progress{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.progress span{display:block;height:100%;background:var(--accent);width:0}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+
+/* v2 additions */
+.stackv{display:grid;gap:12px}
+.spacer{margin-right:auto}
+.pad{padding:14px}
+.m0{margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.segs.big button{font-weight:700;min-height:44px;padding:8px 16px}
+th.ck,td.ck{width:44px;padding-right:0}
+td.ck input{width:22px;height:22px}
+.selbar{display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:var(--radius);padding:8px 12px;position:sticky;top:64px;z-index:20}
+.selbar.on{display:flex}
+.selbar span{font-weight:700;margin-right:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.card{all:unset;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:grid;gap:6px;border-left:4px solid var(--c,var(--line))}
+.card:hover{border-color:var(--muted)}
+.card h3{font-size:19px}
+.card .meta{font-size:13px;color:var(--muted)}
+.meter{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.meter span{display:block;height:100%;background:var(--good)}
+.rows{display:grid;border:1px solid var(--line);border-radius:var(--radius)}
+.rows > div{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.rows > div:first-child{border-top:0}
+.rows .t{cursor:pointer}
+.rows input[type=checkbox]{width:24px;height:24px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;font-size:15px}
+.kv div span{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.contact a{color:var(--accent);font-weight:600}
+.quote{white-space:pre-wrap;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;font-size:15px}
+.req-dot{width:14px;height:14px;background:#e07b00;border:2px solid #fff;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+@media (max-width:760px){ .selbar{top:56px} }
+
+.maptools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.f.inline{display:flex;align-items:center;gap:8px;font-size:14px}
+.f.inline select{width:auto;min-height:36px;padding:4px 8px}
+#map.big{height:78vh}
+.board{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:12px;overflow-x:auto;align-items:start}
+.col{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:8px;display:grid;gap:8px;min-height:200px;align-content:start}
+.col.over{outline:2px dashed var(--accent);outline-offset:-4px}
+.col h3{font-size:16px;display:flex;justify-content:space-between;padding:4px 4px 2px}
+.bcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c,var(--line));border-radius:6px;padding:8px 10px;display:grid;gap:3px;cursor:grab;font-size:14px}
+.bcard .sec{font-size:12.5px}
+.bcard select{min-height:30px;padding:2px 6px;font-size:13px;justify-self:start}
+.issue{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.issue button{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);padding:12px 10px;min-height:54px;font-weight:600;cursor:pointer;text-align:left}
+.issue button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.stopnum{background:#2c6a43;color:#fff;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;font:700 12px/1 var(--body);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+#routeMap{height:44vh;min-height:260px;border-radius:var(--radius);border:1px solid var(--line)}
+@media (max-width:760px){ .board{grid-template-columns:repeat(4,82vw)} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="var(--accent-soft)"/><circle cx="15" cy="15" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="2" fill="var(--accent)"/></svg>
+      <div><h1>Reno Tree Inventory</h1><small>Urban Forestry · field app</small></div>
+    </div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#nearby" data-view="nearby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>Nearby</a>
+      <a href="#trees" data-view="trees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="6"/><path d="M12 15v7"/></svg>Trees</a>
+      <a href="#work" data-view="work"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Work</a>
+      <a href="#requests" data-view="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H8l-4 4z"/></svg>Requests</a>
+      <a href="#more" data-view="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>More</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="banner"></div>
+
+  <!-- NEARBY -->
+  <section id="view-nearby" class="view" aria-label="Nearby">
+    <div class="stackv">
+      <div class="toolbar"><h2>Nearby</h2><button class="btn" id="locBtn">Use my location</button></div>
+      <div class="quick"><button class="btn primary big" id="flagBtn">Flag a tree</button><button class="btn big" id="plantBtn">Plant a tree</button></div>
+      <div class="gps" id="gpsMsg">Turn on location to list the closest trees and requests. The map needs signal; the list works offline.</div>
+      <div id="map"></div>
+      <div class="maptools"><label class="f inline">Color trees by <select id="nColor"><option value="cond">Condition</option><option value="work">Open work</option><option value="insp">Last inspected</option></select></label><button class="btn small" id="mapBig">Larger map</button><button class="btn small hidden" id="routeClear">Clear route</button></div>
+      <div class="legend" id="mapLegend"></div>
+      <div class="filters">
+        <select id="nShow" aria-label="Show"><option value="Active">Trees</option><option value="">All sites (stumps, planting sites)</option><option value="open">Trees with open work</option><option value="req">Open requests</option></select>
+        <select id="nCount" aria-label="How many"><option>25</option><option selected>50</option><option>100</option></select>
+      </div>
+      <div class="near" id="nearList"><div class="empty pad">No location yet.</div></div>
+    </div>
+  </section>
+
+  <!-- TREES -->
+  <section id="view-trees" class="view" aria-label="Trees">
+    <div class="stackv">
+      <div class="toolbar"><h2>Trees<span class="count" id="treeCount"></span></h2><button class="btn primary" id="addTree">Add tree</button></div>
+      <div class="filters">
+        <input type="search" id="tSearch" placeholder="Search ID, species, address, park" aria-label="Search trees">
+        <select id="tCond" aria-label="Condition"><option value="">All conditions</option></select>
+        <select id="tSite" aria-label="Growing space"><option value="">All growing spaces</option></select>
+        <select id="tTrim" aria-label="Trim cycle area"><option value="">All trim cycle areas</option></select>
+        <select id="tArea" aria-label="Area or park"><option value="">All areas and parks</option></select>
+        <select id="tStatus" aria-label="Status"><option value="Active">Active trees</option><option value="">All statuses</option></select>
+        <select id="tInsp" aria-label="Inspection"><option value="">Any inspection date</option><option value="never">Never inspected</option><option value="3">Not inspected in 3+ years</option><option value="5">Not inspected in 5+ years</option><option value="recent">Inspected in last 30 days</option></select>
+        <select id="tPrune" aria-label="Pruning"><option value="">Any pruning date</option><option value="never">No pruning on record</option><option value="5">Not pruned in 5+ years</option><option value="7">Not pruned in 7+ years</option></select>
+      </div>
+      <div class="list"><table>
+        <thead><tr><th data-sort="common">Tree</th><th data-sort="botanical">Scientific name</th><th data-sort="dbh" class="r">DBH</th><th data-sort="condition">Condition</th><th data-sort="address">Location</th><th data-sort="inspected">Inspected</th><th data-sort="openWR">Open work</th></tr></thead>
+        <tbody id="treeRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- WORK -->
+  <section id="view-work" class="view" aria-label="Work">
+    <div class="stackv">
+      <div class="toolbar">
+        <div class="segs big" role="tablist"><button type="button" data-mode="records" aria-pressed="true">Work records</button><button type="button" data-mode="board" aria-pressed="false">Board</button><button type="button" data-mode="orders" aria-pressed="false">Work orders</button></div>
+        <span class="spacer"></span>
+        <button class="btn primary" id="addWR">New work record</button>
+        <button class="btn primary hidden" id="addWO">New work order</button>
+      </div>
+      <!-- records -->
+      <div id="recPane" class="stackv">
+        <div class="filters">
+          <input type="search" id="rSearch" placeholder="Search task, tree ID, address, crew, WR #" aria-label="Search work records">
+          <select id="rStatus" aria-label="Status"><option value="open">All open</option><option value="">All statuses</option></select>
+          <select id="rCat" aria-label="Category"><option value="">All categories</option></select>
+          <select id="rTask" aria-label="Task"><option value="">All tasks</option></select>
+          <select id="rPri" aria-label="Priority"><option value="">All priorities</option></select>
+          <select id="rWO" aria-label="Work order"><option value="">In any work order or none</option><option value="none">Not in a work order</option></select>
+          <select id="rTrim" aria-label="Trim cycle area"><option value="">All trim cycle areas</option></select>
+        </div>
+        <div class="selbar" id="selBar"><span id="selCount">0 selected</span><button class="btn small" id="selAll">Select all shown</button><button class="btn small" id="selNone">Clear</button><button class="btn small" id="selRoute">Suggest route</button><button class="btn small primary" id="selToWO">Add to work order</button></div>
+        <div class="count" id="recCount"></div>
+        <div class="list"><table>
+          <thead><tr><th class="ck"><span class="sr">Select</span></th><th data-sort="priRank">Priority</th><th data-sort="task">Task</th><th data-sort="treeTag">Tree / location</th><th data-sort="crew">Crew</th><th data-sort="created">Created</th><th data-sort="status">Status</th></tr></thead>
+          <tbody id="recRows"></tbody></table></div>
+      </div>
+      <!-- board -->
+      <div id="boardPane" class="hidden"><div class="note" id="boardNote" style="margin-bottom:8px"></div><div class="board" id="board"></div></div>
+      <!-- orders -->
+      <div id="ordPane" class="stackv hidden">
+        <div class="filters">
+          <input type="search" id="oSearch" placeholder="Search work order name, number, crew" aria-label="Search work orders">
+          <select id="oStatus" aria-label="Status"><option value="open">All open</option><option value="">All statuses</option></select>
+        </div>
+        <div class="cards" id="ordCards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REQUESTS -->
+  <section id="view-requests" class="view" aria-label="Service requests">
+    <div class="stackv">
+      <div class="toolbar"><h2>Service requests<span class="count" id="srCount"></span></h2><button class="btn primary" id="addSR">New request</button></div>
+      <div class="filters">
+        <input type="search" id="qSearch" placeholder="Search address, comments, name, request #" aria-label="Search requests">
+        <select id="qStatus" aria-label="Status"><option value="open">All open</option><option value="">All statuses</option></select>
+        <select id="qType" aria-label="Request type"><option value="">All request types</option></select>
+        <select id="qSource" aria-label="Source"><option value="">All sources</option></select>
+      </div>
+      <div class="list"><table>
+        <thead><tr><th data-sort="srId">Request</th><th data-sort="complaint">Type</th><th data-sort="address">Address</th><th data-sort="source">Source</th><th data-sort="created">Created</th><th data-sort="status">Status</th></tr></thead>
+        <tbody id="srRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- MORE: overview + data -->
+  <section id="view-more" class="view" aria-label="Overview and data">
+    <div class="stackv" style="gap:16px">
+      <div class="tiles" id="tiles"></div>
+      <div class="grid2">
+        <div class="panel"><h2>Needs attention</h2><div class="sub">Open P1 and P2 work, overdue work and high-priority requests</div><div class="attn" id="attn"></div></div>
+        <div class="panel"><h2>Open work by task</h2><div class="bars" id="byTask"></div></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Work completed, last 12 months</h2><div class="bars" id="doneCat"></div><div class="note" id="doneNote"></div></div>
+        <div class="panel"><h2>Condition</h2><div class="stack" id="condStack"></div><div class="legend" id="condLegend"></div><div class="note" id="inspNote"></div></div>
+      </div>
+      <div class="panel"><h2>Species composition</h2><div class="sub">Active trees. Reno&rsquo;s street tree guidelines cap any one species at 10% of the inventory; bars over 10% are flagged.</div><div class="bars" id="species"></div><div class="note" id="genusNote"></div></div>
+
+      <h2 style="font-size:24px;margin-top:8px">Data</h2>
+      <div class="datagrid">
+        <div class="panel">
+          <h2>Import from TreePlotter</h2>
+          <p class="note m0">Select one or more CSV exports: trees, work records, work orders, inspections and service requests. The app recognizes each file. Re-importing updates records by their TreePlotter ID and keeps anything you've changed in this app.</p>
+          <button class="btn primary" id="importBtn">Choose CSV files</button>
+          <input type="file" id="importFile" accept=".csv,text/csv" multiple class="hidden">
+          <div class="progress hidden" id="impProg"><span></span></div>
+          <div class="note" id="impMsg"></div>
+        </div>
+        <div class="panel">
+          <h2>Back up and move devices</h2>
+          <p class="note m0">Everything lives on this device only. Save a backup regularly, and restore it to move your data to another phone or computer.</p>
+          <label class="check"><input type="checkbox" id="bkPhotos" checked> Include photos</label>
+          <button class="btn" id="backupBtn">Save backup file</button>
+          <button class="btn" id="restoreBtn">Restore from backup</button>
+          <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
+          <div class="note" id="bkMsg"></div>
+        </div>
+        <div class="panel">
+          <h2>Phone ↔ desktop</h2>
+          <p class="note m0">Each device keeps its own copy. To keep a phone and a desktop in step, send a changes file from one and merge it on the other. Where the same record was edited on both, the newer edit wins.</p>
+          <label class="f">This device's name<input type="text" id="deviceName" placeholder="e.g. CG phone"></label>
+          <button class="btn primary" id="sendChg">Send my changes</button>
+          <button class="btn" id="mergeBtn">Merge changes or a backup</button>
+          <input type="file" id="mergeFile" accept=".json,application/json" multiple class="hidden">
+          <div class="note" id="syncMsg"></div>
+        </div>
+        <div class="panel">
+          <h2>Export</h2>
+          <p class="note m0">Spreadsheets for the office or for entering updates in TreePlotter. "Changed here" exports only what was added or edited in this app.</p>
+          <button class="btn" id="expTrees">Trees CSV</button>
+          <button class="btn" id="expWR">Work records CSV</button>
+          <button class="btn" id="expWRchg">Work records changed here</button>
+          <button class="btn" id="expInsp">Inspections CSV</button>
+          <button class="btn" id="expSR">Service requests CSV</button>
+        </div>
+        <div class="panel">
+          <h2>This device</h2>
+          <label class="f">Your name or initials (for inspections and crew)<input type="text" id="inspectorName" placeholder="e.g. CG"></label>
+          <div class="note" id="storeMsg"></div>
+          <button class="btn danger" id="wipeBtn">Delete all data on this device</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle" id="sheet"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<datalist id="treeList"></datalist>
+<datalist id="crewList"></datalist>
+<datalist id="taskList"></datalist>
+<datalist id="equipList"></datalist>
+<script>
+(() => {
+"use strict";
+/* ================= vocabularies (from Reno's TreePlotter) ================= */
+const COND = ["Excellent","Good","Fair","Poor","Dead","Volunteer","Champion"];
+const COND_C = {Excellent:"good",Good:"good",Fair:"info",Poor:"warn",Dead:"crit",Volunteer:"dead",Champion:"acc"};
+const COND_HEX = {Excellent:"#1f8a4c",Good:"#2f9e57",Fair:"#356a9f",Poor:"#d08a1c",Dead:"#c0392b",Volunteer:"#7d817f",Champion:"#6a3fa0"};
+const RISK = ["Low","Moderate","High","Extreme"];
+const RISK_C = {Low:"good",Moderate:"info",High:"warn",Extreme:"crit"};
+const SITES = ["Park","Parkway > 5","Parkway < 5","Sound Wall","Tree Well < 50ft^3","Tree Well > 50ft^3","Road Median","Along River","Open Space","In Yard","Front Yard","Paring Lot Island","Suspended Pavement 75-150ft^3","Suspended Pavement 150-360ft^3","Suspended Pavement >600ft^3","Fire Station","City Easement"];
+const SIDES = ["Park","Front","Side","Rear","Median","Sound Wall","Fire Station"];
+const TTYPES = ["Public","HOA in ROW","Private"];
+const SIZES = ["Small","Medium","Large","Multi-stem","Grouping"];
+const TSTAT = ["Active","Dead","Stump","Removed","Planting site"];
+
+const TASKS = ["A300 Prune: SRO","A300 Prune: Cycle","A300","Elevations Only","Elevations: SRO","Train Young Tree","Root Prune","Down Limb","Remove Tree","Removal: SRO","Remove Stump","Down Tree","Haul Wood","Plant Tree","Planting: SRO","Planting Prep","Watering","Mulch","Gator Bag","Tree Stake Removal","Install Stakes","Irrigation Work","Irrigation Install","Inspect Tree","SRO: Inspection","Root Exposure","Root Flare Exposure Planted Too Deep","Chemical Treatment","Girdling","Porous Pave","Roots Torn Away by Equipment","Contractor Line Clearance","Contractor Pruning","Contractor Removal","Brush Chipping","Plaque Install","Misc"];
+const CATS = ["Prune","Remove","Plant","Inspection","PHC","Site Rehabs","Contractor Work","Nursery","Misc"];
+const TASK_CAT = {"A300 Prune: SRO":"Prune","A300 Prune: Cycle":"Prune","A300":"Prune","Elevations Only":"Prune","Elevations: SRO":"Prune","Train Young Tree":"Prune","Root Prune":"Prune","Down Limb":"Prune",
+  "Remove Tree":"Remove","Removal: SRO":"Remove","Remove Stump":"Remove","Down Tree":"Remove","Haul Wood":"Remove","Plant Tree":"Plant","Planting: SRO":"Plant","Planting Prep":"Plant","Watering":"Plant","Mulch":"Plant",
+  "Gator Bag":"Plant","Tree Stake Removal":"Plant","Install Stakes":"Plant","Irrigation Install":"Plant","Irrigation Work":"Site Rehabs","Inspect Tree":"Inspection","SRO: Inspection":"Inspection","Root Exposure":"Inspection",
+  "Root Flare Exposure Planted Too Deep":"Inspection","Chemical Treatment":"PHC","Girdling":"Site Rehabs","Porous Pave":"Site Rehabs","Roots Torn Away by Equipment":"Site Rehabs","Contractor Line Clearance":"Contractor Work",
+  "Contractor Pruning":"Contractor Work","Contractor Removal":"Contractor Work","Brush Chipping":"Misc","Plaque Install":"Site Rehabs","Misc":"Misc"};
+const EQUIP = ["From Ground","Small Bucket","Large Bucket","Climber","Small Stump Grinder","Large Stump Grinder","Internal","Asplundh","Contractor","Backhoe"];
+const PRI = ["Priority 1 Emergency","Priority 2 Tomorrow","Priority 3 ASAP","Priority 4 Routine","No Priority","High","Medium","Low"];
+const PRI_NEW = PRI.slice(0,5);
+const PRI_C = {"Priority 1 Emergency":"crit","Priority 2 Tomorrow":"crit","Priority 3 ASAP":"warn","Priority 4 Routine":"info","High":"warn","Medium":"info","Low":"dead","No Priority":"dead"};
+const PRI_DAYS = {"Priority 1 Emergency":0,"Priority 2 Tomorrow":1,"Priority 3 ASAP":14,"Priority 4 Routine":90};
+const priShort = p => p ? p.replace(/^Priority (\d) /,"P$1 ") : "No priority";
+const WRSTAT = ["Unassigned","Requested","Scheduled","In Progress","Completed","Cancelled"];
+const WRSTAT_C = {Unassigned:"dead",Requested:"info",Scheduled:"acc","In Progress":"warn",Completed:"good",Cancelled:"dead"};
+const WOSTAT = ["Created","Assigned","In Progress","Completed","Cancelled"];
+const WOSTAT_C = {Created:"info",Assigned:"acc","In Progress":"warn",Completed:"good",Cancelled:"dead"};
+const WOPRI = ["High","Medium","Low"];
+const SRSTAT = ["Open","Needs Inspection","Needs Call Back","Needs Escalation","Work Orders Made","Request Rerouted","Resolved"];
+const SRSTAT_C = {"Open":"info","Needs Inspection":"warn","Needs Call Back":"warn","Needs Escalation":"crit","Work Orders Made":"acc","Request Rerouted":"dead","Resolved":"good"};
+const SRTYPES = ["Removal Request","Pruning Request","Tree Encroachment Issue","Down Tree","Down Limb","Hanger","Tree Inspection – Hazard","Tree Inspection – Traffic","Tree Inspection – Code Enforcement","Tree Inspection - General","Issue With Neighbor's Tree","Private Tree Issue","Planting Request","Other Not Listed"];
+const SRSRC = ["Reno Direct","Park Maintainer","Park Supervisor","Code Enforcement","Public Works","Park Admin","Field"];
+const DEFECTS = ["Dead branches","Broken / hanging limbs","Cracks or splits","Decay or cavity","Codominant stems / included bark","Lean","Root damage or heaving","Girdling roots","Pest or disease signs","Stakes / hardware left on","Vehicle or pedestrian clearance","Wire conflict","Sidewalk or curb damage","Sign or light obstruction","Vandalism / mower damage","Poor establishment","Planted too deep / buried flare","Irrigation problem"];
+const ACTIONS = {"No action":null,"Re-inspect":"Inspect Tree","A300 prune":"A300 Prune: SRO","Elevate / clearance":"Elevations Only","Train young tree":"Train Young Tree","Root prune":"Root Prune","Remove tree":"Remove Tree","Remove stump":"Remove Stump","Remove stakes":"Tree Stake Removal","Chemical treatment":"Chemical Treatment","Watering":"Watering","Mulch":"Mulch","Root flare exposure":"Root Flare Exposure Planted Too Deep","Plant tree":"Plant Tree","Line clearance (contractor)":"Contractor Line Clearance"};
+const VAR = k => `var(--${k})`;
+const isOpenWR = r => !["Completed","Cancelled"].includes(r.status);
+const isOpenWO = o => !["Completed","Cancelled"].includes(o.status);
+const isOpenSR = q => !["Resolved","Request Rerouted"].includes(q.status);
+const catOf = task => TASK_CAT[task] || "Misc";
+
+/* ================= state ================= */
+const S = { trees:new Map(), recs:new Map(), ords:new Map(), insp:new Map(), reqs:new Map(),
+  view:"nearby", workMode:"records", sel:new Set(),
+  tSort:{k:"tag",asc:true}, rSort:{k:"priRank",asc:true}, qSort:{k:"created",asc:false}, me:null, ready:false };
+const STORES = ["trees","records","orders","inspections","requests"];
+const MAPS = {trees:()=>S.trees,records:()=>S.recs,orders:()=>S.ords,inspections:()=>S.insp,requests:()=>S.reqs};
+
+/* ================= helpers ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = (n,w) => String(n).padStart(w,"0");
+const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1,2)}-${pad(d.getDate(),2)}`;
+const today = () => isoOf(new Date());
+function addDays(iso,n){ const d=new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return isoOf(d); }
+function fdate(iso){ if(!iso) return ""; const d=new Date(String(iso).slice(0,10)+"T12:00:00"); return isNaN(d)?esc(iso):d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); }
+const newId = p => (p||"")+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const chip = (txt,c) => txt ? `<span class="chip c-${c||"dead"}">${esc(txt)}</span>` : `<span class="sec" style="display:inline">—</span>`;
+const priTag = p => `<span class="pri" style="--c:${VAR(PRI_C[p]||"dead")}">${esc(priShort(p))}</span>`;
+const isOverdue = r => isOpenWR(r) && r.due && r.due < today();
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("on"),2800); }
+function fillSelect(el, arr){ arr.forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=v; el.appendChild(o); }); }
+const opts = (arr, sel, blank) => { const a=sel&&!arr.includes(sel)?[...arr,sel]:arr; return (blank!==undefined?`<option value="">${esc(blank)}</option>`:"") + a.map(v=>`<option${v===sel?" selected":""}>${esc(v)}</option>`).join(""); };
+const treeLabel = t => [t.tag, t.address, t.common].filter(Boolean).join(" · ");
+const tagIndex = new Map();
+function rebuildTagIndex(){ tagIndex.clear(); for(const [id,t] of S.trees) tagIndex.set(String(t.tag).toLowerCase(),id); }
+function treeByTag(tag){ const id=tagIndex.get(String(tag).toLowerCase()); return id?[id,S.trees.get(id)]:null; }
+const ls = { get(k){ try{ return localStorage.getItem(k); }catch{ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch{} } };
+function distFt(a,b){ const R=20902231, r=x=>x*Math.PI/180; const dLat=r(b.lat-a.lat), dLng=r(b.lng-a.lng);
+  const h=Math.sin(dLat/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function bearing(a,b){ const r=x=>x*Math.PI/180, y=Math.sin(r(b.lng-a.lng))*Math.cos(r(b.lat)), x=Math.cos(r(a.lat))*Math.sin(r(b.lat))-Math.sin(r(a.lat))*Math.cos(r(b.lat))*Math.cos(r(b.lng-a.lng));
+  return ["N","NE","E","SE","S","SW","W","NW"][Math.round(((Math.atan2(y,x)*180/Math.PI)+360)%360/45)%8]; }
+const fmtDist = ft => ft<1000?`${Math.round(ft)} ft`:`${(ft/5280).toFixed(ft<52800?2:1)} mi`;
+const dirUrl = (lat,lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+function saveFile(name, data, type){
+  const blob = data instanceof Blob ? data : new Blob([data],{type:type||"text/plain"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000);
+}
+async function shareOrSave(name, blob, title){
+  const file=new File([blob],name,{type:blob.type});
+  try{ if(navigator.canShare&&navigator.canShare({files:[file]})&&matchMedia("(pointer:coarse)").matches){ await navigator.share({files:[file],title}); return; } }
+  catch(e){ if(e&&e.name==="AbortError") return; }
+  saveFile(name,blob); toast(`${name} saved`);
+}
+const me = () => ls.get("inspector")||"";
+
+/* ================= IndexedDB ================= */
+let DB=null;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open("reno-tree-field",1);
+    rq.onupgradeneeded=()=>{ const d=rq.result;
+      d.createObjectStore("trees",{keyPath:"id"});
+      d.createObjectStore("records",{keyPath:"id"});
+      d.createObjectStore("orders",{keyPath:"id"});
+      d.createObjectStore("inspections",{keyPath:"id"}).createIndex("treeId","treeId");
+      d.createObjectStore("photos",{keyPath:"id"}).createIndex("treeId","treeId");
+      d.createObjectStore("requests",{keyPath:"id"});
+      d.createObjectStore("meta",{keyPath:"k"});
+    };
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+  });
+}
+function tx(store,mode,fn){
+  return new Promise((res,rej)=>{ const t=DB.transaction(store,mode); const st=t.objectStore(store); let out; try{ out=fn(st); }catch(e){ rej(e); return; }
+    t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
+}
+const getAll = store => tx(store,"readonly",st=>st.getAll());
+const put = (store,obj) => tx(store,"readwrite",st=>{ st.put(obj); });
+const del = (store,id) => tx(store,"readwrite",st=>{ st.delete(id); });
+const putMany = (store,arr) => tx(store,"readwrite",st=>{ arr.forEach(o=>st.put(o)); });
+const byTree = (store,treeId) => tx(store,"readonly",st=>st.index("treeId").getAll(treeId));
+const clearStore = store => tx(store,"readwrite",st=>{ st.clear(); });
+
+async function save(store,obj){
+  obj={...obj,updated:new Date().toISOString(),local:true};
+  try{ await put(store,obj); }catch(e){ toast("Couldn't save on this device. Storage may be full."); throw e; }
+  MAPS[store]().set(obj.id,obj); if(store==="trees"){ tagIndex.set(String(obj.tag).toLowerCase(),obj.id); gridN=-1; } S._ver=(S._ver||0)+1;
+  bumpChanges(); render(); return obj;
+}
+async function removeRec(store,id){ try{ const d=JSON.parse(ls.get("deleted")||"[]"); d.push([store,id,new Date().toISOString()]); ls.set("deleted",JSON.stringify(d.slice(-2000))); }catch{} await del(store,id); MAPS[store]().delete(id); if(store==="trees") gridN=-1; S._ver=(S._ver||0)+1; bumpChanges(); render(); }
+function bumpChanges(){ ls.set("changesSinceBackup",String((+ls.get("changesSinceBackup")||0)+1)); }
+
+/* ================= numbering ================= */
+function nextNum(map, field){ let max=0; for(const x of map.values()){ const m=/^A-(\d+)$/.exec(x[field]||""); if(m) max=Math.max(max,+m[1]); } return "A-"+pad(max+1,4); }
+const nextTag = () => nextNum(S.trees,"tag");
+
+/* ================= derived ================= */
+function openWRByTree(){ const m=new Map(); for(const r of S.recs.values()) if(r.treeId&&isOpenWR(r)) m.set(r.treeId,(m.get(r.treeId)||0)+1); return m; }
+function recsInOrder(woId){ const a=[]; for(const r of S.recs.values()) if(r.woId===woId) a.push(r);
+  return a.sort((x,y)=>((x.routeSeq??1e9)-(y.routeSeq??1e9))||String(x.address||"").localeCompare(String(y.address||""),undefined,{numeric:true})); }
+function sorter(k,asc){ return (a,b)=>{ let x=a[k], y=b[k]; const ex=x===undefined||x===null||x==="", ey=y===undefined||y===null||y==="";
+  if(ex&&ey) return 0; if(ex) return 1; if(ey) return -1; if(typeof x==="number"&&typeof y==="number") return asc?x-y:y-x;
+  return asc?String(x).localeCompare(String(y),undefined,{numeric:true}):String(y).localeCompare(String(x),undefined,{numeric:true}); }; }
+
+/* ================= render ================= */
+let renderQ=false;
+function render(){ if(renderQ) return; renderQ=true; requestAnimationFrame(()=>{ renderQ=false; doRender(); }); }
+function doRender(){
+  renderBanner();
+  if(S.view==="nearby") renderNearby();
+  if(S.view==="trees") renderTrees();
+  if(S.view==="work") renderWork();
+  if(S.view==="requests") renderRequests();
+  if(S.view==="more"){ renderOverview(); renderData(); }
+  refreshDynFilters();
+  if($("treeList").childElementCount&&S._listN!==S.trees.size) $("treeList").innerHTML="";
+  const ds=`${S.trees.size}|${S._ver||0}`; if(dots&&S._dotSig!==ds){ S._dotSig=ds; refreshDots(); drawMarkers(); }
+}
+function renderBanner(){
+  let h="";
+  if(S.ready&&!S.trees.size) h+=`<div><span><strong>No inventory on this device yet.</strong> Import the TreePlotter CSV exports to load Reno's trees and work.</span><a class="btn small primary" href="#more" id="goImport">Go to import</a></div>`;
+  const lastBk=ls.get("lastBackup"), changed=+ls.get("changesSinceBackup")||0;
+  if(S.ready&&S.trees.size&&changed>=10) h+=`<div class="warn"><span>${changed} changes since your last backup${lastBk?` (${fdate(lastBk)})`:""}. Data on this device isn't copied anywhere else.</span><a class="btn small" href="#more">Back up</a></div>`;
+  $("banner").innerHTML=h;
+}
+function refreshDynFilters(){
+  const sig=`${S.trees.size}|${S.recs.size}|${S.ords.size}|${S.reqs.size}`; if(refreshDynFilters._s===sig) return; refreshDynFilters._s=sig;
+  const tr=new Set(), ar=new Set(); for(const t of S.trees.values()){ if(t.trimArea) tr.add(t.trimArea); if(t.area) ar.add(t.area); }
+  const srt=a=>[...a].sort((x,y)=>String(x).localeCompare(String(y),undefined,{numeric:true}));
+  const fill=(id,vals,lbl,keep)=>{ const el=$(id), cur=el.value; el.innerHTML=(keep||`<option value="">${lbl}</option>`)+vals.map(v=>`<option${v===cur?" selected":""}>${esc(v)}</option>`).join(""); };
+  fill("tTrim",srt(tr),"All trim cycle areas"); fill("tArea",srt(ar),"All areas and parks"); fill("rTrim",srt(tr),"All trim cycle areas");
+  const tasks=new Set(TASKS), crews=new Set(), equip=new Set(EQUIP);
+  for(const r of S.recs.values()){ if(r.task) tasks.add(r.task); if(r.crew) crews.add(r.crew); if(r.equipment) equip.add(r.equipment); }
+  for(const o of S.ords.values()) if(o.assignee) crews.add(o.assignee);
+  fill("rTask",srt(tasks),"All tasks");
+  $("taskList").innerHTML=srt(tasks).map(v=>`<option value="${esc(v)}"></option>`).join("");
+  $("crewList").innerHTML=srt(crews).map(v=>`<option value="${esc(v)}"></option>`).join("");
+  $("equipList").innerHTML=srt(equip).map(v=>`<option value="${esc(v)}"></option>`).join("");
+  const el=$("rWO"), cur=el.value; el.innerHTML=`<option value="">In any work order or none</option><option value="none"${cur==="none"?" selected":""}>Not in a work order</option>`+
+    [...S.ords.values()].filter(isOpenWO).sort(sorter("woNum",false)).map(o=>`<option value="${esc(o.id)}"${o.id===cur?" selected":""}>WO ${esc(o.woNum)} · ${esc(o.name||"")}</option>`).join("");
+  const types=new Set(SRTYPES), srcs=new Set(SRSRC); for(const q of S.reqs.values()){ if(q.complaint) types.add(q.complaint); if(q.source) srcs.add(q.source); }
+  fill("qType",srt(types),"All request types"); fill("qSource",srt(srcs),"All sources");
+}
+
+/* ---- trees ---- */
+function renderTrees(){
+  const q=$("tSearch").value.trim().toLowerCase(), fc=$("tCond").value, fs=$("tSite").value, fst=$("tStatus").value, ftr=$("tTrim").value, far=$("tArea").value, fi=$("tInsp").value, fp=$("tPrune").value;
+  const t0=today(), d30=addDays(t0,-30), icut= fi==="3"?addDays(t0,-1095): fi==="5"?addDays(t0,-1826):null, pcut= fp==="5"?addDays(t0,-1826): fp==="7"?addDays(t0,-2557):null;
+  const oc=openWRByTree(); let rows=[];
+  for(const [id,t] of S.trees){
+    const st=t.status||"Active";
+    if(fc&&t.condition!==fc) continue; if(fs&&t.site!==fs) continue; if(fst&&st!==fst) continue; if(ftr&&t.trimArea!==ftr) continue; if(far&&t.area!==far) continue;
+    if(fi==="never"&&t.inspected) continue; if(icut&&t.inspected&&t.inspected>=icut) continue; if(fi==="recent"&&!(t.inspected>=d30)) continue;
+    if(fp==="never"&&t.pruned) continue; if(pcut&&t.pruned&&t.pruned>=pcut) continue;
+    if(q&&!`${t.tag} ${t.common} ${t.botanical} ${t.address} ${t.area} ${t.notes} ${t.keeperId}`.toLowerCase().includes(q)) continue;
+    rows.push({...t,status:st,openWR:oc.get(id)||0});
+  }
+  rows.sort(sorter(S.tSort.k,S.tSort.asc));
+  $("treeCount").textContent=` ${rows.length.toLocaleString()} of ${S.trees.size.toLocaleString()}`;
+  markSort("view-trees",S.tSort);
+  const LIMIT=300, more=rows.length-LIMIT; if(more>0) rows=rows.slice(0,LIMIT);
+  $("treeRows").innerHTML=rows.length?rows.map(t=>`<tr data-tree="${esc(t.id)}" tabindex="0">
+    <td><b>${esc(t.common||"Unidentified")}</b><span class="sec mono">#${esc(t.tag)}</span></td>
+    <td data-c="hide"><i class="sec">${esc(t.botanical||"")}</i></td>
+    <td class="r">${t.dbh!=null?`${t.dbh}"`:""}</td>
+    <td>${chip(t.condition,COND_C[t.condition])}${t.status!=="Active"?` <span class="chip c-dead">${esc(t.status)}</span>`:""}</td>
+    <td data-c="full">${esc(t.address||"")}<span class="sec">${esc([t.area,t.site,t.trimArea?"Trim "+t.trimArea:""].filter(Boolean).join(" · "))}</span></td>
+    <td><span class="sec" style="display:inline">${t.inspected?"Inspected "+fdate(t.inspected):"Never inspected"}</span></td>
+    <td>${t.openWR?`<span class="chip c-warn">${t.openWR} open</span>`:""}</td></tr>`).join("")
+    +(more>0?`<tr><td colspan="7" class="empty" style="padding:14px 12px">Showing the first ${LIMIT} of ${(more+LIMIT).toLocaleString()}. Search or filter to narrow the list.</td></tr>`:"")
+    : `<tr><td colspan="7" class="empty" style="padding:24px 12px">${S.trees.size?"No trees match these filters.":"No trees on this device yet. Import the TreePlotter exports from the More tab."}</td></tr>`;
+}
+function markSort(vid,s){ document.querySelectorAll(`#${vid} th[data-sort]`).forEach(th=>{ th.classList.toggle("sorted",th.dataset.sort===s.k); th.classList.toggle("asc",th.dataset.sort===s.k&&s.asc); }); }
+
+/* ---- work ---- */
+function setWorkMode(m){ S.workMode=m; document.querySelectorAll("[data-mode]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===m));
+  $("recPane").classList.toggle("hidden",m==="orders"); $("ordPane").classList.toggle("hidden",m!=="orders"); $("boardPane").classList.toggle("hidden",m!=="board");
+  document.querySelector("#recPane .list").classList.toggle("hidden",m==="board"); $("recCount").classList.toggle("hidden",m==="board");
+  $("addWR").classList.toggle("hidden",m==="orders"); $("addWO").classList.toggle("hidden",m!=="orders"); render(); }
+function renderWork(){ if(S.workMode==="records") renderRecords(); else if(S.workMode==="board") renderBoard(); else renderOrders(); }
+/* ---- board (desktop workflow) ---- */
+const BCOLS=[["To schedule",["Unassigned","Requested"]],["Scheduled",["Scheduled"]],["In progress",["In Progress"]],["Completed (last 30 days)",["Completed"]]];
+function renderBoard(){
+  const all=filteredRecords.call(null,true); const d30=addDays(today(),-30);
+  const cols=BCOLS.map(([title,sts])=>[title,sts,all.filter(r=>sts.includes(r.status)&&(r.status!=="Completed"||(r.completed||"")>=d30))]);
+  $("boardNote").textContent="Uses the filters above. Drag a card to another column, or change its status on the card.";
+  $("board").innerHTML=cols.map(([title,sts,rs])=>`<div class="col" data-col="${sts[sts.length-1]}"><h3>${title}<span class="count">${rs.length.toLocaleString()}</span></h3>
+    ${rs.slice(0,120).map(r=>`<div class="bcard" draggable="true" data-card="${esc(r.id)}" style="--c:${VAR(PRI_C[r.priority]||"dead")}"><span class="t" data-wr="${esc(r.id)}"><b>${esc(r.task||"Task")}</b></span>
+      <span class="sec">${r.treeTag?`#${esc(r.treeTag)} · `:""}${esc(r.address||"")}</span><span class="sec">${esc(priShort(r.priority))}${r.crew?` · ${esc(r.crew)}`:""}${r.woId&&S.ords.get(r.woId)?` · WO ${esc(S.ords.get(r.woId).woNum)}`:""}${isOverdue(r)?` · <span class="overdue">overdue</span>`:""}</span>
+      <select data-bstat="${esc(r.id)}" aria-label="Status">${WRSTAT.map(x=>`<option${x===r.status?" selected":""}>${x}</option>`).join("")}</select></div>`).join("")}
+    ${rs.length>120?`<div class="note">+${(rs.length-120).toLocaleString()} more. Filter to narrow.</div>`:""}</div>`).join("");
+}
+async function setStatus(id,st){ const r=S.recs.get(id); if(!r||r.status===st) return; const d={...r,status:st}; if(st==="Completed"){ d.completed=r.completed||today(); d.crew=r.crew||me(); }
+  await save("records",d); if(st==="Completed"){ const u=applyCompletion(d); if(u) await save("trees",u); } toast(`${r.task} → ${st}`); }
+function filteredRecords(forBoard){
+  const q=$("rSearch").value.trim().toLowerCase(), fs=$("rStatus").value, fc=$("rCat").value, ft=$("rTask").value, fp=$("rPri").value, fw=$("rWO").value, ftr=$("rTrim").value;
+  const out=[];
+  for(const r of S.recs.values()){
+    if(!forBoard&&(fs==="open"?!isOpenWR(r):(fs&&r.status!==fs))) continue;
+    if(fc&&catOf(r.task)!==fc&&r.category!==fc) continue; if(ft&&r.task!==ft) continue; if(fp&&r.priority!==fp) continue;
+    if(fw==="none"&&r.woId) continue; if(fw&&fw!=="none"&&r.woId!==fw) continue;
+    if(ftr){ const t=r.treeId&&S.trees.get(r.treeId); if(!t||t.trimArea!==ftr) continue; }
+    if(q&&!`${r.wrId} ${r.task} ${r.treeTag} ${r.address} ${r.crew} ${r.description} ${r.common}`.toLowerCase().includes(q)) continue;
+    out.push({...r,priRank:r.priority?PRI.indexOf(r.priority):9});
+  }
+  out.sort(sorter(S.rSort.k,S.rSort.asc)); return out;
+}
+function renderRecords(){
+  let rows=filteredRecords(); S._shown=rows.map(r=>r.id);
+  $("recCount").textContent=`${rows.length.toLocaleString()} of ${S.recs.size.toLocaleString()} work records`;
+  markSort("view-work",S.rSort);
+  const LIMIT=300, more=rows.length-LIMIT; if(more>0) rows=rows.slice(0,LIMIT);
+  const wo=id=>id&&S.ords.get(id);
+  $("recRows").innerHTML=rows.length?rows.map(r=>`<tr data-wr="${esc(r.id)}" tabindex="0">
+    <td class="ck"><input type="checkbox" data-sel="${esc(r.id)}"${S.sel.has(r.id)?" checked":""} aria-label="Select"></td>
+    <td>${priTag(r.priority)}</td>
+    <td data-c="full"><b>${esc(r.task||"Untitled task")}</b><span class="sec">${r.treeTag?`#${esc(r.treeTag)} · `:""}${esc(r.address||"")}${r.common?` · ${esc(r.common)}`:""}</span>${wo(r.woId)?`<span class="sec">WO ${esc(wo(r.woId).woNum)} · ${esc(wo(r.woId).name||"")}</span>`:""}</td>
+    <td data-c="hide"><span class="mono">${esc(r.treeTag||"")}</span></td>
+    <td>${esc(r.crew||"")}</td>
+    <td><span class="sec" style="display:inline">${isOverdue(r)?`<span class="overdue">Overdue ${fdate(r.due)}</span>`:r.status==="Completed"?"Done "+fdate(r.completed):fdate(r.created)}</span></td>
+    <td>${chip(r.status,WRSTAT_C[r.status])}</td></tr>`).join("")
+    +(more>0?`<tr><td colspan="7" class="empty" style="padding:14px 12px">Showing the first ${LIMIT} of ${(more+LIMIT).toLocaleString()}. Filter by trim area, task or search to narrow it.</td></tr>`:"")
+    : `<tr><td colspan="7" class="empty" style="padding:24px 12px">${S.recs.size?"No work records match these filters.":"No work records yet. Import the TreePlotter work records export, or inspect a tree."}</td></tr>`;
+  updateSelBar();
+}
+function updateSelBar(){ $("selBar").classList.toggle("on",S.sel.size>0); $("selCount").textContent=`${S.sel.size} selected`; }
+function renderOrders(){
+  const q=$("oSearch").value.trim().toLowerCase(), fs=$("oStatus").value;
+  const counts=new Map(); for(const r of S.recs.values()) if(r.woId){ const c=counts.get(r.woId)||{n:0,d:0}; c.n++; if(!isOpenWR(r)) c.d++; counts.set(r.woId,c); }
+  const rows=[...S.ords.values()].filter(o=>(fs==="open"?isOpenWO(o):(!fs||o.status===fs))&&(!q||`${o.woNum} ${o.name} ${o.assignee} ${o.notes}`.toLowerCase().includes(q)))
+    .sort((a,b)=>String(b.created||"").localeCompare(String(a.created||"")));
+  $("ordCards").innerHTML=rows.length?rows.map(o=>{ const c=counts.get(o.id)||{n:0,d:0}; const col=WOSTAT_C[o.status]||"dead";
+    return `<button class="card" data-wo="${esc(o.id)}" style="--c:${VAR(col)}"><span class="meta mono">WO ${esc(o.woNum)}</span><h3>${esc(o.name||"Untitled work order")}</h3>
+      <span class="meta">${chip(o.status,col)} ${o.priority?chip(o.priority,o.priority==="High"?"warn":"dead"):""} ${esc(o.assignee||"Unassigned")}${o.due?` · due ${fdate(o.due)}`:""}</span>
+      <span class="meta">${c.n} work record${c.n===1?"":"s"}${c.n?`, ${c.d} done`:""}</span>${c.n?`<span class="meter"><span style="width:${c.d/c.n*100}%"></span></span>`:""}</button>`; }).join("")
+    : `<div class="empty">${S.ords.size?"No work orders match.":"No work orders yet. Select work records and choose “Add to work order”, or start a new one."}</div>`;
+}
+
+/* ---- requests ---- */
+function renderRequests(){
+  const q=$("qSearch").value.trim().toLowerCase(), fs=$("qStatus").value, ft=$("qType").value, fsrc=$("qSource").value;
+  const rows=[...S.reqs.values()].filter(r=>(fs==="open"?isOpenSR(r):(!fs||r.status===fs))&&(!ft||r.complaint===ft)&&(!fsrc||r.source===fsrc)
+    &&(!q||`${r.srId} ${r.address} ${r.comments} ${r.notes} ${r.contactName} ${r.client}`.toLowerCase().includes(q))).sort(sorter(S.qSort.k,S.qSort.asc));
+  $("srCount").textContent=` ${rows.length} of ${S.reqs.size}`;
+  markSort("view-requests",S.qSort);
+  $("srRows").innerHTML=rows.length?rows.map(r=>`<tr data-sr="${esc(r.id)}" tabindex="0">
+    <td><b class="mono">#${esc(r.srId)}</b>${r.priority?`<span class="sec">${esc(r.priority)} priority</span>`:""}</td>
+    <td data-c="full"><b>${esc(r.complaint||"Request")}</b><span class="sec">${esc((r.comments||r.notes||"").replace(/\s+/g," ").slice(0,90))}${(r.comments||"").length>90?"…":""}</span></td>
+    <td data-c="full">${esc(r.address||"No address")}</td>
+    <td data-c="hide">${esc(r.source||"")}</td>
+    <td><span class="sec" style="display:inline">${fdate(r.created)}</span></td>
+    <td>${chip(r.status,SRSTAT_C[r.status])}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty" style="padding:24px 12px">${S.reqs.size?"No requests match these filters.":"No service requests yet. Import the TreePlotter service requests export, or add one."}</td></tr>`;
+}
+
+/* ---- overview + data ---- */
+function renderOverview(){
+  const trees=[...S.trees.values()], active=trees.filter(t=>(t.status||"Active")==="Active");
+  const recs=[...S.recs.values()], open=recs.filter(isOpenWR), overdue=open.filter(isOverdue), reqOpen=[...S.reqs.values()].filter(isOpenSR);
+  const t0=today(), d30=addDays(t0,-30), y1=addDays(t0,-365);
+  const insp30=[...S.insp.values()].filter(i=>i.date>=d30).length;
+  $("tiles").innerHTML=[["t-acc",active.length,"Active trees"],["",trees.filter(t=>t.status==="Planting site").length,"Vacant / proposed planting sites"],
+    ["",open.length,"Open work records"],[overdue.length?"t-crit":"",overdue.length,"Overdue work records"],
+    [reqOpen.length?"t-warn":"",reqOpen.length,"Open service requests"],["",insp30,"Inspections in last 30 days"]]
+    .map(([c,n,l])=>`<div class="tile ${c}"><b>${Number(n).toLocaleString()}</b><span>${l}</span></div>`).join("");
+  const rank=r=>{ const i=PRI.indexOf(r.priority); return i<0?9:i; };
+  const urgent=open.filter(r=>r.priority==="Priority 1 Emergency"||r.priority==="Priority 2 Tomorrow"||isOverdue(r)).sort((a,b)=>(rank(a)-rank(b))||String(a.due||"").localeCompare(String(b.due||""))).slice(0,8);
+  const hiReq=reqOpen.filter(r=>r.priority==="High"&&r.status!=="Work Orders Made").slice(0,4);
+  $("attn").innerHTML=(urgent.length||hiReq.length)?urgent.map(r=>`<button data-wr="${esc(r.id)}">${priTag(r.priority)}<span><b>${esc(r.task)}</b><span class="m"> · ${esc(r.address||"")}${r.treeTag?" #"+esc(r.treeTag):""}</span>${isOverdue(r)?`<span class="m overdue" style="display:block">Overdue · due ${fdate(r.due)}</span>`:""}</span></button>`).join("")
+    + hiReq.map(r=>`<button data-sr="${esc(r.id)}"><span class="pri" style="--c:var(--warn)">Request</span><span><b>${esc(r.complaint||"Request")} #${esc(r.srId)}</b><span class="m"> · ${esc(r.address||"")} · ${esc(r.status)}</span></span></button>`).join("")
+    : `<div class="empty">Nothing urgent is open.</div>`;
+  const byTask={}; open.forEach(r=>byTask[r.task||"Untitled"]=(byTask[r.task||"Untitled"]||0)+1);
+  bars("byTask",Object.entries(byTask).sort((a,b)=>b[1]-a[1]).slice(0,10),"No open work records.");
+  const byCat={}; let hrs=0; recs.forEach(r=>{ if(r.status==="Completed"&&r.completed>=y1){ const c=r.category||catOf(r.task); byCat[c]=(byCat[c]||0)+1; hrs+=Number(r.hours)||0; } });
+  bars("doneCat",Object.entries(byCat).sort((a,b)=>b[1]-a[1]),"No completed work in the last 12 months.");
+  $("doneNote").textContent=hrs?`${Math.round(hrs).toLocaleString()} labor hours recorded on completed work in the last 12 months.`:"";
+  const c={}; active.forEach(t=>{ if(t.condition) c[t.condition]=(c[t.condition]||0)+1; }); const tot=Object.values(c).reduce((a,b)=>a+b,0)||1;
+  $("condStack").innerHTML=COND.filter(k=>c[k]).map(k=>`<span title="${k}: ${c[k]}" style="width:${c[k]/tot*100}%;background:${COND_HEX[k]}"></span>`).join("");
+  $("condLegend").innerHTML=COND.map(k=>`<span><i style="background:${COND_HEX[k]}"></i>${k} ${(c[k]||0).toLocaleString()}</span>`).join("");
+  const y3=addDays(t0,-1095); $("inspNote").innerHTML=`<strong>${active.filter(t=>!t.inspected).length.toLocaleString()}</strong> active trees have no inspection date; <strong>${active.filter(t=>t.inspected&&t.inspected<y3).length.toLocaleString()}</strong> were last inspected over 3 years ago.`;
+  const sp={}; active.forEach(t=>{ const k=t.common||"Unidentified"; sp[k]=(sp[k]||0)+1; }); const n=active.length||1;
+  const spr=Object.entries(sp).sort((a,b)=>b[1]-a[1]).slice(0,10); const pmax=spr.length?spr[0][1]/n*100:1;
+  $("species").innerHTML=spr.length?spr.map(([k,v])=>{ const p=v/n*100; return `<div class="bar"><span class="lbl" title="${esc(k)}">${esc(k)}</span><span class="trk"><span class="${p>10?"over":""}" style="width:${p/pmax*100}%"></span></span><span class="v">${p.toFixed(1)}%</span></div>`; }).join(""):`<div class="empty">Import the inventory to see species mix.</div>`;
+  const gen={}; active.forEach(t=>{ const g=(t.botanical||"").trim().split(/\s+/)[0]; if(g) gen[g]=(gen[g]||0)+1; }); const tg=Object.entries(gen).sort((a,b)=>b[1]-a[1])[0];
+  $("genusNote").innerHTML=tg?`Largest genus: <strong><i>${esc(tg[0])}</i></strong> at ${(tg[1]/n*100).toFixed(1)}% of active trees.`:"";
+}
+function bars(id,rows,empty){ const max=Math.max(1,...rows.map(r=>r[1]));
+  $(id).innerHTML=rows.length?rows.map(([k,v])=>`<div class="bar"><span class="lbl" title="${esc(k)}">${esc(k)}</span><span class="trk"><span style="width:${v/max*100}%"></span></span><span class="v">${v.toLocaleString()}</span></div>`).join(""):`<div class="empty">${empty}</div>`; }
+async function renderData(){
+  if(document.activeElement!==$("inspectorName")) $("inspectorName").value=me();
+  if(document.activeElement!==$("deviceName")) $("deviceName").value=ls.get("deviceName")||"";
+  let m=`${S.trees.size.toLocaleString()} trees, ${S.recs.size.toLocaleString()} work records, ${S.ords.size} work orders, ${S.reqs.size} service requests and ${S.insp.size} inspections on this device.`;
+  try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); m+=` Using ${(e.usage/1048576).toFixed(1)} MB.`; }
+    if(navigator.storage&&navigator.storage.persisted){ const p=await navigator.storage.persisted(); m+= p?" Storage is protected from automatic clearing.":" The browser may clear this data if the device runs low on space, so keep backups."; } }catch{}
+  const lb=ls.get("lastBackup"); m+= lb?` Last backup ${fdate(lb)}.`:" No backup saved yet.";
+  $("storeMsg").textContent=m;
+}
+
+/* ---- nearby + map ---- */
+let map=null, layer=null, meMarker=null, watchId=null, followMe=true, dots=null, routeLayer=null;
+/* spatial index: 0.005° cells (~1,800 ft) */
+const GRID=0.005, grid=new Map(); let gridN=-1;
+function rebuildGrid(){ grid.clear(); for(const [id,t] of S.trees){ if(t.lat==null||t.lng==null) continue; const k=Math.floor(t.lat/GRID)+","+Math.floor(t.lng/GRID); let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(id); } gridN=S.trees.size; }
+function treesIn(s,w,n,e){ if(gridN!==S.trees.size) rebuildGrid(); const out=[]; for(let i=Math.floor(s/GRID);i<=Math.floor(n/GRID);i++) for(let j=Math.floor(w/GRID);j<=Math.floor(e/GRID);j++){ const a=grid.get(i+","+j); if(!a) continue; for(const id of a){ const t=S.trees.get(id); if(t&&t.lat>=s&&t.lat<=n&&t.lng>=w&&t.lng<=e) out.push(id); } } return out; }
+function nearestTrees(p,n,maxFt){ let r=0.0008, ids=[]; while(r<0.05){ ids=treesIn(p.lat-r,p.lng-r*1.3,p.lat+r,p.lng+r*1.3); if(ids.length>=n) break; r*=2; }
+  return ids.map(id=>[distFt(p,S.trees.get(id)),id,S.trees.get(id)]).filter(x=>!maxFt||x[0]<=maxFt).sort((a,b)=>a[0]-b[0]).slice(0,n); }
+const INSP_HEX = t => !t.inspected?"#c0392b": t.inspected>=addDays(today(),-1095)?"#2f9e57": t.inspected>=addDays(today(),-1826)?"#d08a1c":"#e0582b";
+function dotColor(t,oc,id){ const st=t.status||"Active"; if(st==="Planting site") return "#9aa09c"; if(st!=="Active") return "#555";
+  const mode=$("nColor").value; if(mode==="work") return oc.get(id)?"#e07b00":"#8fb59a"; if(mode==="insp") return INSP_HEX(t); return COND_HEX[t.condition]||"#2f9e57"; }
+function initMap(){
+  if(map||typeof L==="undefined") return;
+  map=L.map("map",{preferCanvas:true}).setView([39.5296,-119.8138],13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20,maxNativeZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+  const DotLayer=L.GridLayer.extend({ createTile(c){ const tile=document.createElement("canvas"), sz=this.getTileSize(); tile.width=sz.x; tile.height=sz.y; const ctx=tile.getContext("2d");
+    const nw=map.unproject([c.x*sz.x,c.y*sz.y],c.z), se=map.unproject([(c.x+1)*sz.x,(c.y+1)*sz.y],c.z), pd=(nw.lat-se.lat)*0.03;
+    const ids=treesIn(se.lat-pd,nw.lng-pd,nw.lat+pd,se.lng+pd); const rad=c.z<12?1.1:c.z<14?1.8:c.z<16?3:c.z<18?5:7; const oc=S._oc||openWRByTree();
+    for(const id of ids){ const t=S.trees.get(id); const pt=map.project([t.lat,t.lng],c.z); const x=pt.x-c.x*sz.x, y=pt.y-c.y*sz.y;
+      ctx.beginPath(); ctx.arc(x,y,rad,0,6.283); ctx.fillStyle=dotColor(t,oc,id); ctx.fill();
+      if(rad>=3){ ctx.lineWidth=oc.get(id)&&$("nColor").value!=="work"?2.5:1; ctx.strokeStyle=oc.get(id)&&$("nColor").value!=="work"?"#e07b00":"rgba(255,255,255,.9)"; ctx.stroke(); } }
+    return tile; } });
+  dots=new DotLayer({updateWhenZooming:false,keepBuffer:1}).addTo(map);
+  layer=L.layerGroup().addTo(map); routeLayer=L.layerGroup().addTo(map);
+  map.on("moveend",drawMarkers); map.on("dragstart",()=>{ followMe=false; });
+  map.on("click",e=>{ const z=map.getZoom(); if(z<14) return; const tol=(z<16?10:14); const p=map.latLngToContainerPoint(e.latlng); let best=null;
+    const b=map.containerPointToLatLng([p.x-tol,p.y+tol]), b2=map.containerPointToLatLng([p.x+tol,p.y-tol]);
+    for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
+    if(best){ const [,id,t]=best; const oc=openWRByTree(); L.popup().setLatLng([t.lat,t.lng]).setContent(`<b>${esc(t.common||"Unidentified")}</b><br>#${esc(t.tag)} · ${esc(t.address||"")}<br>${esc(t.condition||"")}${t.dbh!=null?` · ${t.dbh}" DBH`:""}${oc.get(id)?`<br><b>${oc.get(id)} open work record${oc.get(id)>1?"s":""}</b>`:""}<br><button class="btn small primary" data-open="t:${esc(id)}" style="margin-top:6px">Open tree</button>`).openOn(map); } });
+  map.on("popupopen",e=>{ e.popup.getElement().querySelectorAll("[data-open]").forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); map.closePopup(); const [k,id]=b.dataset.open.split(":"); k==="t"?openTree(id):openRequest(id); }); });
+  const note=L.control({position:"bottomleft"}); note.onAdd=()=>{ const d=L.DomUtil.create("div"); d.id="zoomNote"; d.style.cssText="background:rgba(255,255,255,.92);color:#222;padding:4px 8px;border-radius:6px;font-size:13px"; return d; }; note.addTo(map);
+  drawMarkers(); drawLegend();
+}
+function refreshDots(){ S._oc=openWRByTree(); if(dots) dots.redraw(); drawLegend(); }
+function drawLegend(){ const el=$("mapLegend"); if(!el) return; const m=$("nColor").value;
+  const items= m==="work"?[["#e07b00","Open work"],["#8fb59a","No open work"]]: m==="insp"?[["#2f9e57","Inspected < 3 yrs"],["#d08a1c","3–5 yrs"],["#e0582b","5+ yrs"],["#c0392b","Never"]]: COND.slice(0,5).map(c=>[COND_HEX[c],c]);
+  el.innerHTML=[...items,["#9aa09c","Planting site"],["#555","Stump / removed"]].map(([c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join("")+`<span><i style="background:#e07b00;transform:rotate(45deg)"></i>Service request</span>`; }
+function drawMarkers(){
+  if(!map) return; layer.clearLayers();
+  const zn=document.getElementById("zoomNote"); const b=map.getBounds();
+  for(const [id,r] of S.reqs){ if(!isOpenSR(r)||r.lat==null||!b.contains([r.lat,r.lng])) continue;
+    L.marker([r.lat,r.lng],{icon:L.divIcon({className:"",html:'<div class="req-dot"></div>',iconSize:[14,14]})}).addTo(layer)
+      .bindPopup(`<b>${esc(r.complaint||"Request")} #${esc(r.srId)}</b><br>${esc(r.address||"")}<br>${esc(r.status)}<br><button class="btn small primary" data-open="r:${esc(id)}" style="margin-top:6px">Open request</button>`); }
+  if(zn) zn.style.display="none";
+}
+function renderNearby(){
+  initMap(); if(map) setTimeout(()=>map.invalidateSize(),50);
+  if(typeof L==="undefined"&&!$("map").dataset.msg){ $("map").dataset.msg=1; $("map").innerHTML=`<div class="empty pad">The map needs a connection the first time it loads. The list below still works.</div>`; }
+  const list=$("nearList");
+  if(!S.me){ list.innerHTML=`<div class="empty pad">${S.trees.size?"Tap “Use my location” to list what's closest.":"Import the inventory first (More tab)."}</div>`; return; }
+  const show=$("nShow").value, N=+$("nCount").value, m=S.me;
+  if(show==="req"){
+    const arr=[...S.reqs.values()].filter(r=>isOpenSR(r)&&r.lat!=null).map(r=>[distFt(m,r),r]).sort((a,b)=>a[0]-b[0]).slice(0,N);
+    list.innerHTML=arr.length?arr.map(([d,r])=>`<button data-sr="${esc(r.id)}"><span class="d">${fmtDist(d)}<small>${bearing(m,r)}</small></span><span><b>${esc(r.complaint||"Request")}</b> #${esc(r.srId)}<span class="sec">${esc(r.address||"")} · ${fdate(r.created)}</span></span><span>${chip(r.status,SRSTAT_C[r.status])}</span></button>`).join(""):`<div class="empty pad">No open requests with a location.</div>`;
+    return;
+  }
+  const oc=openWRByTree(); const arr=[]; const box=0.02;
+  const ok=(id,t)=> t.lat!=null && (show==="open"?oc.get(id): show?(t.status||"Active")===show:true);
+  for(const [id,t] of S.trees){ if(Math.abs(t.lat-m.lat)>box||Math.abs(t.lng-m.lng)>box*1.3||!ok(id,t)) continue; arr.push([distFt(m,t),id,t]); }
+  if(arr.length<N){ arr.length=0; for(const [id,t] of S.trees) if(ok(id,t)) arr.push([distFt(m,t),id,t]); }
+  arr.sort((a,b)=>a[0]-b[0]);
+  list.innerHTML=arr.length?arr.slice(0,N).map(([d,id,t])=>`<button data-tree="${esc(id)}"><span class="d">${fmtDist(d)}<small>${bearing(m,t)}</small></span>
+    <span><b>${esc(t.common||"Unidentified")}</b>${t.dbh!=null?` · ${t.dbh}"`:""}<span class="sec">#${esc(t.tag)} · ${esc(t.address||"")}${t.inspected?" · inspected "+fdate(t.inspected):" · never inspected"}</span></span>
+    <span>${chip(t.condition,COND_C[t.condition])}${oc.get(id)?`<br><span class="chip c-warn" style="margin-top:4px">${oc.get(id)} open</span>`:""}</span></button>`).join("")
+    : `<div class="empty pad">Nothing found with coordinates.</div>`;
+}
+function startGPS(){
+  if(!("geolocation" in navigator)){ $("gpsMsg").textContent="This browser can't share location."; return; }
+  $("gpsMsg").textContent="Finding your location…"; followMe=true;
+  if(watchId!==null) navigator.geolocation.clearWatch(watchId);
+  watchId=navigator.geolocation.watchPosition(p=>{
+    const first=!S.me; S.me={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy}; S._fixAt=Date.now();
+    $("gpsMsg").textContent=`Location accurate to about ${Math.max(3,Math.round(S.me.acc*3.281))} ft. The list updates as you walk.`; $("locBtn").textContent="Re-center";
+    if(map){ if(!meMarker) meMarker=L.marker([S.me.lat,S.me.lng],{icon:L.divIcon({className:"",html:'<div class="me-dot"></div>',iconSize:[16,16]}),interactive:false,zIndexOffset:1000}).addTo(map); else meMarker.setLatLng([S.me.lat,S.me.lng]);
+      if(first||followMe) map.setView([S.me.lat,S.me.lng],Math.max(map.getZoom(),18)); }
+    if(S.view==="nearby") renderNearby();
+  }, e=>{ $("gpsMsg").textContent= e.code===1?"Location is blocked. Allow location for this site in your browser settings, then tap the button again.":"Couldn't get a location fix. Try again in the open."; },
+  {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+}
+function getFix(){ return new Promise((res,rej)=>{ if(S.me&&Date.now()-(S._fixAt||0)<20000) return res({lat:S.me.lat,lng:S.me.lng});
+  if(!("geolocation" in navigator)) return rej(new Error("no gps"));
+  navigator.geolocation.getCurrentPosition(p=>{ S.me={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy}; S._fixAt=Date.now(); res({lat:S.me.lat,lng:S.me.lng}); },rej,{enableHighAccuracy:true,timeout:20000,maximumAge:10000}); }); }
+
+/* ================= modal ================= */
+let lastFocus=null; const stack=[];
+function openModal(html,back){ if(!$("modal").hidden&&back) stack.push(back); else if($("modal").hidden){ stack.length=0; lastFocus=document.activeElement; } $("sheet").innerHTML=html; $("modal").hidden=false; $("modal").scrollTop=0; }
+function closeModal(){ $("modal").hidden=true; $("sheet").innerHTML=""; stack.length=0; if(lastFocus&&lastFocus.focus) try{lastFocus.focus();}catch{} }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!$("modal").hidden) closeModal(); });
+function armDelete(btn,fn){ btn.addEventListener("click",()=>{ if(btn.classList.contains("armed")) fn(); else { btn.classList.add("armed"); const o=btn.textContent; btn.textContent="Tap again to delete"; setTimeout(()=>{ btn.classList.remove("armed"); btn.textContent=o; },4000); } }); }
+const hdr=(title,meta)=>`<header><div><h2 id="mTitle">${title}</h2>${meta?`<div class="meta">${meta}</div>`:""}</div><button class="btn small x" id="mClose" aria-label="Close">Close</button></header>`;
+const wireClose=()=>{ $("mClose").onclick=closeModal; };
+
+/* ---- tree ---- */
+async function openTree(id){
+  S.ctx=id?()=>openTree(id):null;
+  const isNew=!id, t=isNew?{tag:nextTag(),status:"Active"}:S.trees.get(id); if(!t) return;
+  const [insps,photos]=isNew?[[],[]]:await Promise.all([byTree("inspections",id),byTree("photos",id)]);
+  insps.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const hist=isNew?[]:[...S.recs.values()].filter(r=>r.treeId===id).sort((a,b)=>(isOpenWR(b)-isOpenWR(a))||String(b.completed||b.created||"").localeCompare(String(a.completed||a.created||"")));
+  const near=S.me&&t.lat!=null?` · ${fmtDist(distFt(S.me,t))} ${bearing(S.me,t)} of you`:"";
+  const histRow=r=>`<div><span class="sec" style="display:inline;min-width:84px">${fdate(r.completed||r.created)}</span><span class="t" data-wr="${esc(r.id)}"><b>${esc(r.task||"Task")}</b><span class="sec">${esc([r.crew,r.equipment,r.hours?r.hours+" hrs":""].filter(Boolean).join(" · "))}</span></span>${chip(r.status,WRSTAT_C[r.status])}</div>`;
+  openModal(`${hdr(isNew?"Add tree":`${esc(t.common||"Unidentified")} <span class="mono" style="font-size:15px;color:var(--muted)">#${esc(t.tag)}</span>`, isNew?"New inventory record":esc(t.address||"")+near)}
+  <div class="body">
+    ${isNew?"":`<div class="quick">
+      <button class="btn primary big" id="doInspect">Inspect</button>
+      <button class="btn big" id="doWR">New work record</button>
+      ${t.status==="Planting site"||t.status==="Removed"?`<button class="btn big" id="doPlant">Record planting</button>`:""}
+      ${t.lat!=null?`<a class="btn big" href="${dirUrl(t.lat,t.lng)}" target="_blank" rel="noopener">Directions</a>`:""}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${chip(t.condition||"Condition not rated",COND_C[t.condition])} ${t.risk?chip(t.risk+" risk",RISK_C[t.risk]):""} ${t.status&&t.status!=="Active"?chip(t.status,"dead"):""} ${t.wires?chip("Overhead wires","warn"):""} ${t.plaque?chip("Plaque","acc"):""}</div>
+    <div class="note">${t.inspected?`Last inspected ${fdate(t.inspected)}`:"No inspection on record"} · ${t.pruned?`last pruned ${fdate(t.pruned)}`:"no pruning on record"}${t.dbh!=null?` · ${t.dbh}" DBH`:""}${t.heightRange?` · ${esc(t.heightRange)}`:""}${t.trimArea?` · trim area ${esc(t.trimArea)}`:""}</div>
+    ${photos.length?`<div class="photos">${photos.sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(p=>`<img src="${p.data}" alt="Tree photo ${fdate(p.date)}" data-photo="${esc(p.id)}">`).join("")}</div>`:""}
+    <div class="stackv"><h3 style="font-size:18px">Work history <span class="count">${hist.length}</span></h3>
+      ${hist.length?`<div class="rows">${hist.slice(0,12).map(histRow).join("")}${hist.length>12?`<div><span></span><button type="button" class="btn small" id="moreHist">Show all ${hist.length}</button><span></span></div>`:""}</div>`:`<div class="empty">No work records for this tree.</div>`}
+    </div>
+    <div class="stackv"><h3 style="font-size:18px">Inspections <span class="count">${insps.length}</span></h3>
+      ${insps.length?`<div class="history">${insps.map(i=>`<button type="button" data-insp="${esc(i.id)}"><span>${fdate(i.date)}</span><span>${esc(i.condition||"")}${i.defects&&i.defects.length?` · ${esc(i.defects.slice(0,2).join(", "))}${i.defects.length>2?"…":""}`:""}${i.notes&&!(i.defects&&i.defects.length)?esc(i.notes.slice(0,70)):""}<span class="sec">${esc(i.inspector||"")}${i.action&&i.action!=="No action"?" · "+esc(i.action):""}</span></span><span></span></button>`).join("")}</div>`:`<div class="empty">No inspections on record.</div>`}
+    </div>
+    <details><summary style="cursor:pointer;font-weight:700;padding:6px 0">Edit tree record</summary><div style="height:10px"></div>`}
+    <form id="treeForm" class="stackv" style="gap:16px">
+      <fieldset><legend>Identification</legend>
+        <label class="f">Tree ID<input type="text" id="f-tag" value="${esc(t.tag)}" required></label>
+        <label class="f">Common name<input type="text" id="f-common" value="${esc(t.common||"")}"></label>
+        <label class="f">Scientific name<input type="text" id="f-bot" value="${esc(t.botanical||"")}"></label>
+        <label class="f">DBH (in)<input type="number" inputmode="decimal" id="f-dbh" min="0" step="0.5" value="${t.dbh??""}"></label>
+        <label class="f">Height range<input type="text" id="f-hr" value="${esc(t.heightRange||"")}"></label>
+        <label class="f">Status<select id="f-status">${opts(TSTAT,t.status||"Active")}</select></label>
+        <label class="f">Condition<select id="f-cond">${opts(COND,t.condition,"Not rated")}</select></label>
+        <label class="f">Risk rating<select id="f-risk">${opts(RISK,t.risk,"Not rated")}</select></label>
+      </fieldset>
+      <fieldset><legend>Location</legend>
+        <label class="f wide">Address<input type="text" id="f-addr" value="${esc(t.address||"")}"></label>
+        <label class="f">Growing space<select id="f-site">${opts(SITES,t.site,"Choose")}</select></label>
+        <label class="f">Side<select id="f-side">${opts(SIDES,t.side,"Choose")}</select></label>
+        <label class="f">Area / park<input type="text" id="f-area" value="${esc(t.area||"")}"></label>
+        <label class="f">Trim cycle area<input type="text" id="f-trim" value="${esc(t.trimArea||"")}"></label>
+        <label class="f">Latitude<input type="number" inputmode="decimal" id="f-lat" step="any" value="${t.lat??""}"></label>
+        <label class="f">Longitude<input type="number" inputmode="decimal" id="f-lng" step="any" value="${t.lng??""}"></label>
+        <div class="f" style="align-self:end"><button type="button" class="btn small" id="useGPS">Use my location</button></div>
+        <label class="check"><input type="checkbox" id="f-wires"${t.wires?" checked":""}> Overhead wires</label>
+      </fieldset>
+      <fieldset><legend>Management</legend>
+        <label class="f">Tree type<select id="f-ttype">${opts(TTYPES,t.treeType,"Choose")}</select></label>
+        <label class="f">Size rating<select id="f-size">${opts(SIZES,t.size,"Choose")}</select></label>
+        <label class="f">Ward<input type="text" id="f-ward" value="${esc(t.ward||"")}"></label>
+        <label class="f">Irrigation<input type="text" id="f-irr" value="${esc(t.irrigation||"")}"></label>
+        <label class="f">Utilities<input type="text" id="f-util" value="${esc(t.utilities||"")}"></label>
+        <label class="f">TreeKeeper site ID<input type="text" id="f-keeper" value="${esc(t.keeperId||"")}"></label>
+        <label class="f">Last inspected<input type="date" id="f-insp" value="${esc(t.inspected||"")}"></label>
+        <label class="f">Last pruned<input type="date" id="f-pruned" value="${esc(t.pruned||"")}"></label>
+      </fieldset>
+      <label class="f wide">Notes<textarea id="f-notes">${esc(t.notes||"")}</textarea></label>
+      <div class="err" id="treeErr"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${isNew?"":`<button class="btn danger" id="treeDel" type="button">Delete tree</button>`}<span class="spacer"></span><button class="btn primary" id="treeSave" type="submit">${isNew?"Add tree":"Save tree record"}</button></div>
+    </form>
+    ${isNew?"":"</details>"}
+  </div>`);
+  wireClose();
+  if(!isNew){ $("doInspect").onclick=()=>openInspection(id); $("doWR").onclick=()=>openRecord(null,{treeId:id}); if($("doPlant")) $("doPlant").onclick=()=>openPlant({siteId:id});
+    if($("moreHist")) $("moreHist").onclick=e=>{ e.target.closest(".rows").innerHTML=hist.map(histRow).join(""); }; }
+  $("useGPS").onclick=()=>getFix().then(p=>{ $("f-lat").value=p.lat.toFixed(7); $("f-lng").value=p.lng.toFixed(7); toast("Location filled in"); }).catch(()=>toast("Couldn't get your location"));
+  $("treeForm").onsubmit=async e=>{ e.preventDefault();
+    const num=v=>v===""?null:Number(v); const tag=$("f-tag").value.trim();
+    if(!tag){ $("treeErr").textContent="Give the tree an ID."; return; }
+    const dup=treeByTag(tag); if(dup&&dup[0]!==id){ $("treeErr").textContent=`#${tag} is already used by another tree.`; return; }
+    const data={...t,id:id||newId("n"),tag,common:$("f-common").value.trim(),botanical:$("f-bot").value.trim(),dbh:num($("f-dbh").value),heightRange:$("f-hr").value.trim(),
+      status:$("f-status").value,condition:$("f-cond").value,risk:$("f-risk").value,address:$("f-addr").value.trim(),site:$("f-site").value,side:$("f-side").value,
+      area:$("f-area").value.trim(),trimArea:$("f-trim").value.trim(),lat:num($("f-lat").value),lng:num($("f-lng").value),wires:$("f-wires").checked,
+      treeType:$("f-ttype").value,size:$("f-size").value,ward:$("f-ward").value.trim(),irrigation:$("f-irr").value.trim(),utilities:$("f-util").value.trim(),
+      keeperId:$("f-keeper").value.trim(),inspected:$("f-insp").value,pruned:$("f-pruned").value,notes:$("f-notes").value.trim()};
+    if(isNew) data.created=new Date().toISOString();
+    try{ if(!isNew&&t.tag!==tag) tagIndex.delete(String(t.tag).toLowerCase()); await save("trees",data); toast(isNew?`#${tag} added`:`#${tag} saved`); openTree(data.id); }catch{}
+  };
+  if($("treeDel")) armDelete($("treeDel"),async()=>{ await removeRec("trees",id); tagIndex.delete(String(t.tag).toLowerCase()); closeModal(); toast("Tree deleted"); });
+}
+
+/* ---- photos ---- */
+function readPhoto(file){
+  return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(fr.error); fr.onload=()=>{ const img=new Image(); img.onerror=()=>rej(new Error("img"));
+    img.onload=()=>{ const max=1280, s=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height); res(c.toDataURL("image/jpeg",0.72)); }; img.src=fr.result; }; fr.readAsDataURL(file); });
+}
+function showPhoto(id){ tx("photos","readonly",st=>st.get(id)).then(p=>{ if(!p) return; const w=document.createElement("div"); w.className="modal"; w.style.zIndex=300; w.style.alignItems="center";
+  w.innerHTML=`<div style="display:grid;gap:8px;max-width:96vw"><img src="${p.data}" alt="" style="max-width:96vw;max-height:80vh;border-radius:8px"><div style="display:flex;gap:8px;justify-content:center"><span style="color:#fff">${fdate(p.date)}</span><button class="btn small">Close</button></div></div>`;
+  w.onclick=()=>w.remove(); document.body.appendChild(w); }); }
+
+/* ---- inspection ---- */
+async function openInspection(treeId, inspId, opt){
+  const t=S.trees.get(treeId); if(!t) return; opt=opt||{};
+  const existing=inspId?S.insp.get(inspId):null; const ro=!!existing;
+  const i=existing||{date:today(),inspector:me(),condition:t.condition||"",risk:t.risk||"",dbh:t.dbh??null,defects:[],action:"No action",priority:"Priority 4 Routine",notes:""};
+  let pending=[]; let cond=i.condition;
+  const iphotos=existing?(await byTree("photos",treeId)).filter(p=>p.inspId===inspId):[];
+  openModal(`${hdr(ro?`Inspection · ${fdate(i.date)}`:"Inspect tree", `${esc(t.common||"Unidentified")} #${esc(t.tag)} · ${esc(t.address||"")}${opt.srId?` · for request #${esc(opt.srId)}`:""}`)}
+  <form class="body" id="inspForm">
+    <fieldset>
+      <label class="f">Date<input type="date" id="i-date" value="${esc(i.date)}"${ro?" disabled":""}></label>
+      <label class="f">Inspector<input type="text" id="i-by" value="${esc(i.inspector||"")}" placeholder="Name or initials"${ro?" disabled":""}></label>
+      <label class="f">DBH (in)<input type="number" inputmode="decimal" id="i-dbh" step="0.5" min="0" value="${i.dbh??""}"${ro?" disabled":""}></label>
+      <label class="f">Risk rating<select id="i-risk"${ro?" disabled":""}>${opts(RISK,i.risk,"Not rated")}</select></label>
+    </fieldset>
+    <div class="f wide">Condition<div class="segs" id="i-cond">${COND.map(c=>`<button type="button" data-c="${c}" aria-pressed="${c===cond}"${ro?" disabled":""}>${c}</button>`).join("")}</div></div>
+    <div class="f wide">Observed defects<div class="checks">${DEFECTS.map(d=>`<label class="check"><input type="checkbox" value="${esc(d)}"${(i.defects||[]).includes(d)?" checked":""}${ro?" disabled":""}> ${esc(d)}</label>`).join("")}</div></div>
+    <fieldset>
+      <label class="f">Recommended action<select id="i-action"${ro?" disabled":""}>${opts(Object.keys(ACTIONS),i.action)}</select></label>
+      <label class="f">Priority<select id="i-pri"${ro?" disabled":""}>${opts(PRI_NEW,i.priority)}</select></label>
+    </fieldset>
+    <label class="f wide">Notes<textarea id="i-notes" placeholder="What you saw, access issues, follow-up"${ro?" disabled":""}>${esc(i.notes||"")}</textarea></label>
+    ${i.photoNames?`<div class="note">Photos in TreePlotter: ${esc(i.photoNames.split(",").length)} (${esc(i.photoNames.split(",").map(x=>x.split("_pg_")[0]).join(", "))})</div>`:""}
+    <div class="f wide">Photos${iphotos.length?`<div class="photos">${iphotos.map(p=>`<img src="${p.data}" alt="Inspection photo" data-photo="${esc(p.id)}">`).join("")}</div>`:""}<div class="photos" id="i-photos"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="i-cam">Take photo</button><button type="button" class="btn" id="i-lib">Add from library</button>${ro?`<button type="button" class="btn primary hidden" id="i-savePh">Save photos</button>`:""}</div>
+      <input type="file" id="i-camfile" accept="image/*" capture="environment" class="hidden"><input type="file" id="i-libfile" accept="image/*" multiple class="hidden"></div>
+    ${ro?"":`<label class="check" id="mkWRwrap"><input type="checkbox" id="i-mkwr" checked> Create a work record for the recommended action</label>`}
+    <div class="err" id="inspErr"></div>
+  </form>
+  <footer>${ro?`<button class="btn danger" id="inspDel">Delete inspection</button>`:""}<span class="spacer"></span><button class="btn" id="mCancel">${ro?"Back to tree":"Cancel"}</button>${ro?"":`<button class="btn primary" id="inspSave">Save inspection</button>`}</footer>`);
+  wireClose(); $("mCancel").onclick=()=>openTree(treeId);
+  const drawPending=()=>{ $("i-photos").innerHTML=pending.map((d,k)=>`<span class="ph"><img src="${d}" alt=""><button type="button" data-rm="${k}" aria-label="Remove photo">×</button></span>`).join(""); if($("i-savePh")) $("i-savePh").classList.toggle("hidden",!pending.length); };
+  $("i-photos").addEventListener("click",e=>{ const b=e.target.closest("[data-rm]"); if(b){ pending.splice(+b.dataset.rm,1); drawPending(); } });
+  const addFiles=async files=>{ for(const f of files){ try{ pending.push(await readPhoto(f)); }catch{ toast("Couldn't read that photo"); } } drawPending(); };
+  $("i-cam").onclick=()=>$("i-camfile").click(); $("i-lib").onclick=()=>$("i-libfile").click();
+  $("i-camfile").onchange=e=>{ addFiles([...e.target.files]); e.target.value=""; };
+  $("i-libfile").onchange=e=>{ addFiles([...e.target.files]); e.target.value=""; };
+  if(ro){ armDelete($("inspDel"),async()=>{ await removeRec("inspections",inspId); openTree(treeId); });
+    $("i-savePh").onclick=async()=>{ const base=iphotos.length; await putMany("photos",pending.map((d,k)=>({id:inspId+"-p"+(base+k)+"-"+Date.now().toString(36),treeId,inspId,date:i.date,data:d,updated:new Date().toISOString()})));
+      await save("inspections",{...i,photoCount:(i.photoCount||0)+pending.length}); toast(`${pending.length} photo${pending.length>1?"s":""} added`); openInspection(treeId,inspId); };
+    return; }
+  $("i-cond").addEventListener("click",e=>{ const b=e.target.closest("button[data-c]"); if(!b) return; cond=cond===b.dataset.c?"":b.dataset.c; $("i-cond").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.c===cond)); });
+  const syncWR=()=>{ $("mkWRwrap").style.display=ACTIONS[$("i-action").value]?"":"none"; }; $("i-action").onchange=syncWR; syncWR();
+  $("inspSave").onclick=async()=>{
+    const by=$("i-by").value.trim(); if(by) ls.set("inspector",by);
+    const defects=[...$("inspForm").querySelectorAll(".checks input:checked")].map(x=>x.value); const dbhV=$("i-dbh").value;
+    const rec={id:newId("i"),treeId,treeTag:t.tag,date:$("i-date").value||today(),inspector:by,condition:cond,risk:$("i-risk").value,dbh:dbhV===""?null:Number(dbhV),
+      defects,action:$("i-action").value,priority:$("i-pri").value,notes:$("i-notes").value.trim(),photoCount:pending.length,srId:opt.srId||"",created:new Date().toISOString()};
+    $("inspSave").disabled=true;
+    try{
+      await save("inspections",rec);
+      if(pending.length) await putMany("photos",pending.map((d,k)=>({id:rec.id+"-p"+k,treeId,inspId:rec.id,date:rec.date,data:d,updated:new Date().toISOString()})));
+      const upd={...t}; if(!t.inspected||rec.date>=t.inspected){ upd.inspected=rec.date; if(cond) upd.condition=cond; if(rec.risk) upd.risk=rec.risk; if(rec.dbh!=null) upd.dbh=rec.dbh; }
+      if(defects.includes("Wire conflict")) upd.wires=true;
+      await save("trees",upd);
+      const task=ACTIONS[rec.action];
+      if(task&&$("i-mkwr").checked){
+        const desc=[`${rec.action} recommended at inspection ${fdate(rec.date)}${by?` by ${by}`:""}.`, defects.length?`Defects: ${defects.join("; ")}.`:"", rec.notes].filter(Boolean).join("\n");
+        const r=await save("records",newRecord({treeId,task,priority:rec.priority,description:desc,inspId:rec.id,srId:opt.srId||""}));
+        if(opt.reqId) await linkRequest(opt.reqId,r);
+        toast(`Inspection saved · work record created`); openRecord(r.id);
+      } else { toast("Inspection saved"); if(opt.reqId) openRequest(opt.reqId); else openTree(treeId); }
+    }catch(e){ $("inspErr").textContent="Couldn't save. The device may be out of storage."; $("inspSave").disabled=false; }
+  };
+}
+
+/* ---- work record ---- */
+function newRecord(o){
+  const t=o.treeId?S.trees.get(o.treeId):null; const pri=o.priority||"Priority 4 Routine";
+  return {id:newId("r"),wrId:nextNum(S.recs,"wrId"),status:"Requested",task:o.task||"",category:catOf(o.task),priority:pri,
+    treeId:o.treeId||null,treeTag:t?t.tag:"",address:o.address||(t?t.address:"")||"",common:t?t.common:"",lat:t?t.lat:(o.lat??null),lng:t?t.lng:(o.lng??null),
+    crew:"",equipment:"",hours:null,created:today(),due:PRI_DAYS[pri]!=null?addDays(today(),PRI_DAYS[pri]):"",completed:"",description:o.description||"",
+    woId:o.woId||"",srId:o.srId||"",inspId:o.inspId||"",createdBy:me(),source:"app"};
+}
+function applyCompletion(r){
+  const t=r.treeId&&S.trees.get(r.treeId); if(!t) return null; const d=r.completed||today(), k=r.task||""; let u=null;
+  if(/remove stump|stump/i.test(k)) u={status:"Planting site"};
+  else if(/remove tree|removal|down tree|contractor removal/i.test(k)) u={status:"Stump"};
+  else if(/^plant tree|planting: sro/i.test(k)) u={status:"Active"};
+  else if(/prune|elevation|train young|root prune|line clearance|down limb|^a300/i.test(k)) u={pruned:d};
+  else if(/inspect/i.test(k)) u={inspected:d};
+  return u?{...t,...u}:null;
+}
+function openRecord(id,init){
+  const isNew=!id; let r=isNew?newRecord(init||{}):{...S.recs.get(id)}; if(!r||(!isNew&&!S.recs.get(id))) return;
+  const tree=r.treeId?S.trees.get(r.treeId):null; const wo=r.woId&&S.ords.get(r.woId);
+  const openWOs=[...S.ords.values()].filter(o=>isOpenWO(o)||o.id===r.woId).sort(sorter("woNum",false));
+  openModal(`${hdr(isNew?"New work record":esc(r.task||"Work record"), `WR ${esc(r.wrId)}${r.created?` · created ${fdate(r.created)}`:""}${r.createdBy?` by ${esc(r.createdBy)}`:""}${isOverdue(r)?` · <span class="overdue">Overdue</span>`:""}`)}
+  <form class="body" id="wrForm">
+    ${isNew?"":`<div class="quick">${tree?`<button type="button" class="btn big" id="wrTree">Open tree</button>`:""}${(r.lat!=null||tree&&tree.lat!=null)?`<a class="btn big" href="${dirUrl(tree?tree.lat:r.lat,tree?tree.lng:r.lng)}" target="_blank" rel="noopener">Directions</a>`:""}<button type="button" class="btn big" id="wrPdf">Work sheet PDF</button>${wo?`<button type="button" class="btn big" id="wrWO">WO ${esc(wo.woNum)}</button>`:""}</div>`}
+    <div class="f wide">Status<div class="segs" id="w-status">${WRSTAT.map(s=>`<button type="button" aria-pressed="${s===r.status}" data-s="${s}">${s}</button>`).join("")}</div></div>
+    <fieldset>
+      <label class="f">Work task<input type="text" id="w-task" list="taskList" value="${esc(r.task||"")}" placeholder="e.g. A300 Prune: SRO"></label>
+      <label class="f">Priority<select id="w-pri">${opts(PRI,r.priority,"No priority")}</select></label>
+      <label class="f">Crew<input type="text" id="w-crew" list="crewList" value="${esc(r.crew||"")}" placeholder="Initials, e.g. LP, PC"></label>
+      <label class="f">Equipment<input type="text" id="w-equip" list="equipList" value="${esc(r.equipment||"")}"></label>
+      <label class="f">Due date<input type="date" id="w-due" value="${esc(r.due||"")}"></label>
+      <label class="f">Work order<select id="w-wo"><option value="">Not in a work order</option>${openWOs.map(o=>`<option value="${esc(o.id)}"${o.id===r.woId?" selected":""}>WO ${esc(o.woNum)} · ${esc(o.name||"")}</option>`).join("")}<option value="__new">+ New work order…</option></select></label>
+    </fieldset>
+    <fieldset>
+      <label class="f wide">Tree<input type="text" id="w-tree" list="treeList" value="${tree?esc(treeLabel(tree)):esc(r.treeTag||"")}" placeholder="Type a tree ID or address (optional)"></label>
+      <label class="f wide">Address / location<input type="text" id="w-addr" value="${esc(r.address||"")}"></label>
+      ${tree?`<div class="f wide" style="color:var(--ink);font-weight:400">${esc(tree.common||"Unidentified")}${tree.dbh!=null?` · ${tree.dbh}" DBH`:""} · ${chip(tree.condition||"Not rated",COND_C[tree.condition])}${tree.wires?` ${chip("Overhead wires","warn")}`:""}${tree.trimArea?` · Trim area ${esc(tree.trimArea)}`:""}</div>`:""}
+    </fieldset>
+    <label class="f wide">Description<textarea id="w-desc" placeholder="Scope: what to do and to what standard (ANSI A300), site cautions">${esc(r.description||"")}</textarea></label>
+    <fieldset><legend>Completion</legend>
+      <label class="f">Date completed<input type="date" id="w-done" value="${esc(r.completed||"")}"></label>
+      <label class="f">Hours<input type="number" inputmode="decimal" id="w-hours" min="0" step="0.25" value="${r.hours??""}"></label>
+    </fieldset>
+    ${r.srId?`<div class="note">From service request #${esc(r.srId)}</div>`:""}
+    <div class="note" id="sideNote"></div><div class="err" id="wrErr"></div>
+  </form>
+  <footer>${isNew?"":`<button class="btn danger" id="wrDel">Delete</button>`}<span class="spacer"></span><button class="btn" id="mCancel">Cancel</button><button class="btn primary" id="wrSave">${isNew?"Create work record":"Save"}</button></footer>`);
+  wireClose(); $("mCancel").onclick=()=>{ if(stack.length) stack.pop()(); else closeModal(); };
+  if($("wrTree")) $("wrTree").onclick=()=>openTree(r.treeId);
+  if($("wrWO")) $("wrWO").onclick=()=>openOrder(r.woId);
+  if($("wrPdf")) $("wrPdf").onclick=()=>pdfRecord(S.recs.get(id)||r);
+  let status=r.status;
+  const resolveTree=()=>{ const v=$("w-tree").value.trim(); if(!v) return null; return treeByTag(v.split(" · ")[0].replace(/^#/,"")); };
+  const sideNote=()=>{ let n=""; if(status==="Completed"&&(isNew||S.recs.get(id).status!=="Completed")){ const tt=resolveTree(); if(tt){ const u=applyCompletion({task:$("w-task").value,treeId:tt[0],completed:today()});
+      if(u){ n= u.status?`Completing will change the tree's status to ${u.status}.`: u.pruned?"Completing sets the tree's last-pruned date.": u.inspected?"Completing sets the tree's last-inspected date.":""; } } } $("sideNote").textContent=n; };
+  $("w-status").addEventListener("click",e=>{ const b=e.target.closest("button[data-s]"); if(!b) return; status=b.dataset.s; $("w-status").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); if(status==="Completed"&&!$("w-done").value) $("w-done").value=today(); if(status==="Completed"&&!$("w-crew").value&&me()) $("w-crew").value=me(); sideNote(); });
+  $("w-task").addEventListener("change",sideNote);
+  $("w-pri").onchange=()=>{ const d=PRI_DAYS[$("w-pri").value]; if(isNew&&d!=null) $("w-due").value=addDays(today(),d); };
+  $("w-tree").addEventListener("change",()=>{ const tt=resolveTree(); if(tt&&!$("w-addr").value.trim()) $("w-addr").value=tt[1].address||""; sideNote(); });
+  if($("wrDel")) armDelete($("wrDel"),async()=>{ await removeRec("records",id); S.sel.delete(id); closeModal(); toast("Work record deleted"); });
+  $("wrSave").onclick=async()=>{
+    const tt=resolveTree(), tv=$("w-tree").value.trim();
+    if(tv&&!tt){ $("wrErr").textContent="That tree isn't in the inventory. Pick one from the list, or clear the field and type an address."; return; }
+    if(!$("w-task").value.trim()){ $("wrErr").textContent="Enter the work task."; return; }
+    let woId=$("w-wo").value;
+    if(woId==="__new"){ const o=await save("orders",newOrder({name:`${$("w-task").value.trim()} – ${$("w-addr").value.trim()||"site"}`})); woId=o.id; }
+    const prev=isNew?null:S.recs.get(id);
+    const data={...r,status,task:$("w-task").value.trim(),category:catOf($("w-task").value.trim()),priority:$("w-pri").value,crew:$("w-crew").value.trim(),equipment:$("w-equip").value.trim(),
+      due:$("w-due").value,woId,treeId:tt?tt[0]:null,treeTag:tt?tt[1].tag:"",common:tt?tt[1].common:"",lat:tt?tt[1].lat:r.lat,lng:tt?tt[1].lng:r.lng,
+      address:$("w-addr").value.trim()||(tt?tt[1].address||"":""),description:$("w-desc").value.trim(),completed:status==="Completed"?($("w-done").value||today()):$("w-done").value,
+      hours:$("w-hours").value===""?null:Number($("w-hours").value)};
+    try{
+      await save("records",data);
+      if(status==="Completed"&&(!prev||prev.status!=="Completed")){ const u=applyCompletion(data); if(u) await save("trees",u); }
+      toast(isNew?`Work record ${data.wrId} created`:"Work record saved");
+      if(isNew) openRecord(data.id); else if(stack.length) stack.pop()(); else closeModal();
+    }catch{ $("wrErr").textContent="Couldn't save on this device."; }
+  };
+}
+
+/* ---- work order (batch) ---- */
+function newOrder(o){ return {id:newId("o"),woNum:nextNum(S.ords,"woNum"),name:o.name||"",status:"Created",priority:o.priority||"Medium",assignee:o.assignee||"",created:today(),due:o.due||"",notes:o.notes||"",closeout:"",createdBy:me(),source:"app"}; }
+function openOrder(id){
+  S.ctx=id?()=>openOrder(id):null;
+  const isNew=!id; const o=isNew?newOrder({}):{...S.ords.get(id)}; if(!isNew&&!S.ords.get(id)) return;
+  const recs=isNew?[]:recsInOrder(id); const done=recs.filter(r=>!isOpenWR(r)).length; const hrs=recs.reduce((a,r)=>a+(Number(r.hours)||0),0);
+  openModal(`${hdr(isNew?"New work order":esc(o.name||"Work order"), `WO ${esc(o.woNum)}${o.created?` · created ${fdate(o.created)}`:""}${recs.length?` · ${done} of ${recs.length} done`:""}${hrs?` · ${hrs} hrs`:""}`)}
+  <div class="body">
+    ${isNew?"":`<div class="quick"><button type="button" class="btn primary big" id="woPdf"${recs.length?"":" disabled"}>Crew sheet PDF</button><button type="button" class="btn big" id="woRoute"${recs.length>1?"":" disabled"}>Suggest route</button><button type="button" class="btn big" id="woAdd">Add work records</button></div>
+    ${recs.some(r=>r.routeSeq!=null)?`<div class="note">Records are listed in the saved route order.</div>`:""}`}
+    <form id="woForm" class="stackv" style="gap:14px">
+      <div class="f wide">Status<div class="segs" id="o-status">${WOSTAT.map(s=>`<button type="button" aria-pressed="${s===o.status}" data-s="${s}">${s}</button>`).join("")}</div></div>
+      <fieldset>
+        <label class="f wide">Work order name<input type="text" id="o-name" value="${esc(o.name||"")}" placeholder="e.g. Idlewild Park fall pruning"></label>
+        <label class="f">Assigned to<input type="text" id="o-assignee" list="crewList" value="${esc(o.assignee||"")}" placeholder="Crew or contractor"></label>
+        <label class="f">Priority<select id="o-pri">${opts(WOPRI,o.priority,"None")}</select></label>
+        <label class="f">Due date<input type="date" id="o-due" value="${esc(o.due||"")}"></label>
+      </fieldset>
+      <label class="f wide">Notes for the crew<textarea id="o-notes">${esc(o.notes||"")}</textarea></label>
+      <label class="f wide">Closeout notes<textarea id="o-close" placeholder="Filled in when the work order is finished">${esc(o.closeout||"")}</textarea></label>
+      <div class="err" id="woErr"></div>
+    </form>
+    ${isNew?"":`<div class="stackv"><div class="toolbar"><h3 style="font-size:18px;margin-right:auto">Work records <span class="count">${recs.length}</span></h3>${recs.some(isOpenWR)?`<button type="button" class="btn small" id="woDoneAll">Mark selected complete</button>`:""}</div>
+      ${recs.length?`<div class="rows" id="woRecs">${recs.map(r=>`<div><input type="checkbox" data-wck="${esc(r.id)}" aria-label="Select ${esc(r.task)}"${isOpenWR(r)?"":" disabled"}><span class="t" data-wr="${esc(r.id)}"><b>${esc(r.task||"Task")}</b> ${r.treeTag?`<span class="mono">#${esc(r.treeTag)}</span>`:""}<span class="sec">${esc(r.address||"")}${r.common?` · ${esc(r.common)}`:""}${r.equipment?` · ${esc(r.equipment)}`:""}</span></span><span style="display:grid;gap:4px;justify-items:end">${chip(r.status,WRSTAT_C[r.status])}<button type="button" class="btn small" data-unlink="${esc(r.id)}">Remove</button></span></div>`).join("")}</div>`:`<div class="empty">No work records yet. Use “Add work records”, or select records on the Work tab.</div>`}</div>`}
+  </div>
+  <footer>${isNew?"":`<button class="btn danger" id="woDel">Delete</button>`}<span class="spacer"></span><button class="btn" id="mCancel">Close</button><button class="btn primary" id="woSave">${isNew?"Create work order":"Save"}</button></footer>`);
+  wireClose(); $("mCancel").onclick=closeModal;
+  let status=o.status;
+  $("o-status").addEventListener("click",e=>{ const b=e.target.closest("button[data-s]"); if(!b) return; status=b.dataset.s; $("o-status").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+  const collect=()=>({...o,status,name:$("o-name").value.trim(),assignee:$("o-assignee").value.trim(),priority:$("o-pri").value,due:$("o-due").value,notes:$("o-notes").value.trim(),closeout:$("o-close").value.trim()});
+  $("woSave").onclick=async()=>{ const d=collect(); if(!d.name){ $("woErr").textContent="Give the work order a name."; return; }
+    const prev=S.ords.get(o.id); await save("orders",d);
+    if(prev&&prev.assignee!==d.assignee&&d.assignee){ for(const r of recsInOrder(o.id)) if(isOpenWR(r)&&!r.crew) await save("records",{...r,crew:d.assignee,status:r.status==="Requested"||r.status==="Unassigned"?"Scheduled":r.status}); }
+    toast(isNew?`WO ${d.woNum} created`:"Work order saved"); if(isNew&&S._pendingAdd){ const ids=S._pendingAdd; S._pendingAdd=null; await addToOrder(d.id,ids); } openOrder(d.id); };
+  if(isNew) return;
+  $("woPdf").onclick=async()=>{ const d=collect(); if(JSON.stringify(d)!==JSON.stringify(o)&&d.name) await save("orders",d); pdfOrder(S.ords.get(id)); };
+  $("woAdd").onclick=()=>pickRecords(id); $("woRoute").onclick=()=>openRoute(recs.map(r=>r.id),id);
+  $("woRecs")&&$("woRecs").addEventListener("click",async e=>{ const u=e.target.closest("[data-unlink]"); if(u){ const r=S.recs.get(u.dataset.unlink); await save("records",{...r,woId:""}); openOrder(id); } });
+  if($("woDoneAll")) $("woDoneAll").onclick=async()=>{ const ids=[...document.querySelectorAll("[data-wck]:checked")].map(x=>x.dataset.wck); if(!ids.length){ toast("Tick the work records that are done"); return; }
+    for(const rid of ids){ const r=S.recs.get(rid); const d={...r,status:"Completed",completed:r.completed||today(),crew:r.crew||o.assignee||me()}; await save("records",d); const u=applyCompletion(d); if(u) await save("trees",u); }
+    if(recsInOrder(id).every(r=>!isOpenWR(r))&&status!=="Completed"){ await save("orders",{...collect(),status:"Completed"}); }
+    toast(`${ids.length} marked complete`); openOrder(id); };
+  armDelete($("woDel"),async()=>{ for(const r of recsInOrder(id)) await save("records",{...r,woId:""}); await removeRec("orders",id); closeModal(); toast("Work order deleted; its work records are kept"); });
+}
+async function addToOrder(woId,ids){ const o=S.ords.get(woId); for(const rid of ids){ const r=S.recs.get(rid); if(!r) continue; await save("records",{...r,woId,crew:r.crew||o.assignee||"",status:(r.status==="Requested"||r.status==="Unassigned")&&o.assignee?"Scheduled":r.status}); } }
+function chooseOrderFor(ids){
+  const open=[...S.ords.values()].filter(isOpenWO).sort(sorter("woNum",false));
+  openModal(`${hdr(`Add ${ids.length} work record${ids.length>1?"s":""} to a work order`)}
+  <div class="body"><button class="btn primary big" id="cwNew">New work order</button>
+  ${open.length?`<div class="rows">${open.map(o=>`<div><span class="mono">WO ${esc(o.woNum)}</span><span class="t" data-pick="${esc(o.id)}"><b>${esc(o.name||"Untitled")}</b><span class="sec">${esc(o.assignee||"Unassigned")} · ${recsInOrder(o.id).length} records</span></span><button class="btn small" data-pick="${esc(o.id)}">Add here</button></div>`).join("")}</div>`:`<div class="empty">No open work orders yet.</div>`}</div>`);
+  wireClose();
+  $("cwNew").onclick=()=>{ S._pendingAdd=ids; openOrder(null); };
+  $("sheet").querySelectorAll("[data-pick]").forEach(b=>b.onclick=async()=>{ await addToOrder(b.dataset.pick,ids); S.sel.clear(); toast(`Added to WO ${S.ords.get(b.dataset.pick).woNum}`); openOrder(b.dataset.pick); });
+}
+function pickRecords(woId){
+  const o=S.ords.get(woId); let chosen=new Set();
+  openModal(`${hdr(`Add work records to WO ${esc(o.woNum)}`, "Open records not already in a work order")}
+  <div class="body"><div class="filters"><input type="search" id="pkQ" placeholder="Address, task, tree ID, crew"><select id="pkTrim"><option value="">All trim areas</option>${[...new Set([...S.trees.values()].map(t=>t.trimArea).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join("")}</select>
+  ${S.me?`<select id="pkNear"><option value="">Anywhere</option><option value="1320">Within ¼ mile of me</option><option value="2640">Within ½ mile of me</option></select>`:""}</div>
+  <div class="count" id="pkCount"></div><div class="rows" id="pkList"></div></div>
+  <footer><span class="spacer"></span><button class="btn" id="mCancel">Cancel</button><button class="btn primary" id="pkAdd">Add selected</button></footer>`);
+  wireClose(); $("mCancel").onclick=()=>openOrder(woId);
+  const draw=()=>{ const q=$("pkQ").value.trim().toLowerCase(), tr=$("pkTrim").value, nr=$("pkNear")?+$("pkNear").value:0;
+    let a=[...S.recs.values()].filter(r=>isOpenWR(r)&&!r.woId&&(!q||`${r.task} ${r.address} ${r.treeTag} ${r.crew} ${r.common}`.toLowerCase().includes(q))
+      &&(!tr||(r.treeId&&S.trees.get(r.treeId)&&S.trees.get(r.treeId).trimArea===tr))&&(!nr||(r.lat!=null&&distFt(S.me,r)<=nr)));
+    a.sort((x,y)=>String(x.address||"").localeCompare(String(y.address||""),undefined,{numeric:true}));
+    $("pkCount").textContent=`${a.length} open record${a.length===1?"":"s"}${a.length>200?" · showing 200":""} · ${chosen.size} selected`;
+    $("pkList").innerHTML=a.slice(0,200).map(r=>`<div><input type="checkbox" data-pk="${esc(r.id)}"${chosen.has(r.id)?" checked":""}><span><b>${esc(r.task)}</b> ${r.treeTag?`<span class="mono">#${esc(r.treeTag)}</span>`:""}<span class="sec">${esc(r.address||"")} · ${esc(priShort(r.priority))}</span></span><span></span></div>`).join("")||`<div class="empty pad">Nothing matches.</div>`; };
+  ["pkQ","pkTrim","pkNear"].forEach(i=>$(i)&&$(i).addEventListener("input",draw));
+  $("pkList").addEventListener("change",e=>{ const c=e.target.closest("[data-pk]"); if(c){ c.checked?chosen.add(c.dataset.pk):chosen.delete(c.dataset.pk); $("pkCount").textContent=$("pkCount").textContent.replace(/\d+ selected/,`${chosen.size} selected`); } });
+  $("pkAdd").onclick=async()=>{ if(!chosen.size){ toast("Tick at least one record"); return; } await addToOrder(woId,[...chosen]); toast(`${chosen.size} added`); openOrder(woId); };
+  draw();
+}
+
+/* ---- service request ---- */
+async function linkRequest(reqId,rec){ const q=S.reqs.get(reqId); if(!q) return; await save("requests",{...q,status:"Work Orders Made",linked:[...(q.linked||[]),rec.id]}); }
+function openRequest(id){
+  S.ctx=id?()=>openRequest(id):null;
+  const isNew=!id; const q=isNew?{id:newId("q"),srId:nextNum(S.reqs,"srId"),status:"Open",source:"Field",created:today(),createdBy:me()}:{...S.reqs.get(id)}; if(!isNew&&!S.reqs.get(id)) return;
+  const linked=isNew?[]:[...S.recs.values()].filter(r=>(q.linked||[]).includes(r.id)||(r.srId&&r.srId===q.srId));
+  let near=[]; if(q.lat!=null){ for(const [tid,t] of S.trees){ if(t.lat==null||Math.abs(t.lat-q.lat)>0.002||Math.abs(t.lng-q.lng)>0.0026) continue; near.push([distFt(q,t),tid,t]); } near.sort((a,b)=>a[0]-b[0]); near=near.slice(0,8); }
+  const tel=s=>String(s||"").replace(/[^\d+]/g,"");
+  openModal(`${hdr(isNew?"New service request":`${esc(q.complaint||"Service request")} <span class="mono" style="font-size:15px;color:var(--muted)">#${esc(q.srId)}</span>`, isNew?"":`${esc(q.address||"No address")} · ${esc(q.source||"")} · ${fdate(q.created)}`)}
+  <div class="body">
+    ${isNew?"":`<div class="quick">${q.lat!=null?`<a class="btn big" href="${dirUrl(q.lat,q.lng)}" target="_blank" rel="noopener">Directions</a>`:""}<button type="button" class="btn big" id="srSiteWR">Work record (no tree)</button></div>
+    ${q.comments?`<div class="quote">${esc(q.comments)}</div>`:""}
+    ${(q.contactName||q.phone||q.email||q.client)?`<div class="kv contact"><div><span>Contact</span>${esc(q.contactName||q.client||"")}</div>${q.phone?`<div><span>Phone</span><a href="tel:${esc(tel(q.phone))}">${esc(q.phone)}</a></div>`:""}${q.email?`<div><span>Email</span><a href="mailto:${esc(q.email)}">${esc(q.email)}</a></div>`:""}</div>`:""}
+    ${q.photoNames?`<div class="note">TreePlotter photos: ${esc(q.photoNames)}</div>`:""}
+    <div class="stackv"><h3 style="font-size:18px">Trees near this request</h3>
+      ${near.length?`<div class="rows">${near.map(([d,tid,t])=>`<div><span class="sec" style="display:inline;min-width:56px">${fmtDist(d)}</span><span class="t" data-tree="${esc(tid)}"><b>${esc(t.common||"Unidentified")}</b> <span class="mono">#${esc(t.tag)}</span><span class="sec">${esc(t.address||"")} · ${esc(t.condition||"")}${t.dbh!=null?` · ${t.dbh}"`:""}</span></span><span style="display:grid;gap:4px"><button type="button" class="btn small" data-srinsp="${esc(tid)}">Inspect</button><button type="button" class="btn small" data-srwr="${esc(tid)}">Work record</button></span></div>`).join("")}</div>`:`<div class="empty">${q.lat!=null?"No inventoried trees within about 600 ft.":"This request has no location."}</div>`}
+    </div>
+    ${linked.length?`<div class="stackv"><h3 style="font-size:18px">Work records from this request</h3><div class="rows">${linked.map(r=>`<div><span class="mono">${esc(r.wrId)}</span><span class="t" data-wr="${esc(r.id)}"><b>${esc(r.task)}</b><span class="sec">${esc(r.address||"")}</span></span>${chip(r.status,WRSTAT_C[r.status])}</div>`).join("")}</div></div>`:""}`}
+    <form id="srForm" class="stackv" style="gap:14px">
+      <div class="f wide">Status<div class="segs" id="q-status">${SRSTAT.map(s=>`<button type="button" aria-pressed="${s===q.status}" data-s="${s}">${s}</button>`).join("")}</div></div>
+      <fieldset>
+        <label class="f">Request type<select id="q-type">${opts(SRTYPES,q.complaint,"Choose")}</select></label>
+        <label class="f">Priority<select id="q-pri">${opts(WOPRI,q.priority,"None")}</select></label>
+        <label class="f">Source<select id="q-src">${opts(SRSRC,q.source,"Choose")}</select></label>
+        <label class="f">Due date<input type="date" id="q-due" value="${esc(q.due||"")}"></label>
+        <label class="f wide">Address<input type="text" id="q-addr" value="${esc(q.address||"")}"></label>
+        ${isNew?`<label class="f">Latitude<input type="number" step="any" id="q-lat"></label><label class="f">Longitude<input type="number" step="any" id="q-lng"></label><div class="f" style="align-self:end"><button type="button" class="btn small" id="q-gps">Use my location</button></div>`:""}
+      </fieldset>
+      ${isNew?`<fieldset><label class="f">Contact name<input type="text" id="q-name"></label><label class="f">Phone<input type="tel" id="q-phone"></label><label class="f">Email<input type="email" id="q-email"></label></fieldset><label class="f wide">What was reported<textarea id="q-comments"></textarea></label>`:""}
+      <label class="f wide">Staff notes<textarea id="q-notes" placeholder="Findings, call-backs, routing">${esc(q.notes||"")}</textarea></label>
+      <div class="err" id="srErr"></div>
+    </form>
+  </div>
+  <footer>${isNew?"":`<button class="btn danger" id="srDel">Delete</button>`}<span class="spacer"></span><button class="btn" id="mCancel">Close</button><button class="btn primary" id="srSave">${isNew?"Add request":"Save"}</button></footer>`);
+  wireClose(); $("mCancel").onclick=closeModal;
+  let status=q.status;
+  $("q-status").addEventListener("click",e=>{ const b=e.target.closest("button[data-s]"); if(!b) return; status=b.dataset.s; $("q-status").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+  if(isNew) $("q-gps").onclick=()=>getFix().then(p=>{ $("q-lat").value=p.lat.toFixed(7); $("q-lng").value=p.lng.toFixed(7); toast("Location filled in"); }).catch(()=>toast("Couldn't get your location"));
+  const collect=()=>{ const d={...q,status,complaint:$("q-type").value,priority:$("q-pri").value,source:$("q-src").value,due:$("q-due").value,address:$("q-addr").value.trim(),notes:$("q-notes").value.trim()};
+    if(isNew){ const n=v=>v===""?null:Number(v); Object.assign(d,{lat:n($("q-lat").value),lng:n($("q-lng").value),contactName:$("q-name").value.trim(),phone:$("q-phone").value.trim(),email:$("q-email").value.trim(),comments:$("q-comments").value.trim()}); }
+    return d; };
+  $("srSave").onclick=async()=>{ const d=collect(); if(!d.address&&d.lat==null){ $("srErr").textContent="Add an address or location."; return; } await save("requests",d); toast(isNew?`Request #${d.srId} added`:"Request saved"); if(isNew) openRequest(d.id); else closeModal(); };
+  if(isNew) return;
+  const back=()=>openRequest(id);
+  $("sheet").querySelectorAll("[data-srinsp]").forEach(b=>b.onclick=async()=>{ await save("requests",collect()); openInspection(b.dataset.srinsp,null,{srId:q.srId,reqId:id}); });
+  $("sheet").querySelectorAll("[data-srwr]").forEach(b=>b.onclick=async()=>{ await save("requests",collect()); const rec=await save("records",newRecord({treeId:b.dataset.srwr,task:/remov/i.test(q.complaint||"")?"Removal: SRO":/prun|encroach|hanger|limb/i.test(q.complaint||"")?"A300 Prune: SRO":"SRO: Inspection",
+      description:`Service request #${q.srId}${q.complaint?` (${q.complaint})`:""}: ${(q.comments||"").trim()}`.trim(),srId:q.srId})); await linkRequest(id,rec); toast(`Work record ${rec.wrId} created`); openRecord(rec.id); });
+  $("srSiteWR").onclick=async()=>{ await save("requests",collect()); const rec=await save("records",newRecord({task:/down/i.test(q.complaint||"")?"Down Tree":"SRO: Inspection",address:q.address,lat:q.lat,lng:q.lng,description:`Service request #${q.srId}: ${(q.comments||"").trim()}`,srId:q.srId}));
+    await linkRequest(id,rec); toast(`Work record ${rec.wrId} created`); openRecord(rec.id); };
+  armDelete($("srDel"),async()=>{ await removeRec("requests",id); closeModal(); toast("Request deleted"); });
+}
+
+/* ================= field: flag a tree ================= */
+const ISSUES=[["Needs pruning","A300 Prune: SRO","Priority 4 Routine"],["Clearance / encroaching","Elevations Only","Priority 3 ASAP"],["Broken or hanging limb","Down Limb","Priority 2 Tomorrow"],
+  ["Tree down","Down Tree","Priority 1 Emergency"],["Dead or dying","Remove Tree","Priority 3 ASAP"],["Stump to grind","Remove Stump","Priority 4 Routine"],["Stakes to remove","Tree Stake Removal","Priority 4 Routine"],
+  ["Needs water","Watering","Priority 3 ASAP"],["Pest or disease","Chemical Treatment","Priority 4 Routine"],["Root / sidewalk issue","Root Prune","Priority 4 Routine"],["Needs inspection","Inspect Tree","Priority 4 Routine"],["Something else","Misc","Priority 4 Routine"]];
+async function flagStart(){
+  openModal(`${hdr("Flag a tree","Finding your location…")}<div class="body"><div class="empty">Getting a GPS fix. Stand next to the tree.</div></div>`); wireClose();
+  let p; try{ p=await getFix(); }catch{ $("sheet").querySelector(".body").innerHTML=`<div class="err">Couldn't get your location. Allow location for this site, step into the open, and try again.</div>`; return; }
+  const near=nearestTrees(p,8,600);
+  openModal(`${hdr("Which tree?", `Closest to you · ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`)}
+  <div class="body"><div class="near">${near.length?near.map(([d,id,t])=>`<button data-flag="${esc(id)}"><span class="d">${fmtDist(d)}<small>${bearing(p,t)}</small></span><span><b>${esc(t.common||"Unidentified")}</b>${t.dbh!=null?` · ${t.dbh}"`:""}<span class="sec">#${esc(t.tag)} · ${esc(t.address||"")}${t.status&&t.status!=="Active"?" · "+esc(t.status):""}</span></span><span>${chip(t.condition,COND_C[t.condition])}</span></button>`).join(""):`<div class="empty pad">No inventoried trees within 600 ft.</div>`}</div>
+  <button class="btn big" id="flagNew">It's not listed. Add a tree here</button></div>`);
+  wireClose();
+  $("sheet").querySelectorAll("[data-flag]").forEach(b=>b.onclick=()=>flagForm(b.dataset.flag));
+  $("flagNew").onclick=async()=>{ const t=await save("trees",{id:newId("n"),tag:nextTag(),status:"Active",lat:+p.lat.toFixed(7),lng:+p.lng.toFixed(7),address:near[0]?near[0][2].address||"":"",trimArea:near[0]?near[0][2].trimArea||"":"",area:near[0]?near[0][2].area||"":"",notes:`Added in the field ${today()}${me()?` by ${me()}`:""}`,created:new Date().toISOString()});
+    toast(`Tree #${t.tag} added at your location`); flagForm(t.id,true); };
+}
+function flagForm(treeId,isNewTree){
+  const t=S.trees.get(treeId); let issue=null, pending=[];
+  const open=[...S.ords.values()].filter(isOpenWO).sort(sorter("woNum",false));
+  openModal(`${hdr("Flag "+esc(t.common||"tree"), `#${esc(t.tag)} · ${esc(t.address||"no address yet")}`)}
+  <div class="body">
+    ${isNewTree?`<div class="note">New tree record. Fill in species and address later from the tree's Edit tree record section.</div>`:""}
+    <div class="f wide">What's wrong?<div class="issue" id="fIssue">${ISSUES.map(([l],k)=>`<button type="button" data-k="${k}" aria-pressed="false">${esc(l)}</button>`).join("")}</div></div>
+    <fieldset><label class="f">Priority<select id="fPri">${opts(PRI_NEW,"Priority 4 Routine")}</select></label>
+      <label class="f">Add to work order<select id="fWO"><option value="">Not now</option>${open.map(o=>`<option value="${esc(o.id)}">WO ${esc(o.woNum)} · ${esc(o.name||"")}</option>`).join("")}</select></label></fieldset>
+    <label class="f wide">Note<textarea id="fNote" placeholder="Optional: what you see, access, hazards"></textarea></label>
+    <div class="f wide">Photos<div class="photos" id="fPh"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="fCam">Take photo</button><button type="button" class="btn" id="fLib">Add from library</button></div>
+      <input type="file" id="fCamF" accept="image/*" capture="environment" class="hidden"><input type="file" id="fLibF" accept="image/*" multiple class="hidden"></div>
+    <div class="err" id="fErr"></div>
+  </div>
+  <footer><button class="btn" id="fInspect">Full inspection instead</button><span class="spacer"></span><button class="btn primary big" id="fSave">Save flag</button></footer>`);
+  wireClose();
+  $("fIssue").addEventListener("click",e=>{ const b=e.target.closest("[data-k]"); if(!b) return; issue=ISSUES[+b.dataset.k]; $("fIssue").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); $("fPri").value=issue[2]; });
+  const draw=()=>{ $("fPh").innerHTML=pending.map((d,k)=>`<span class="ph"><img src="${d}" alt=""><button type="button" data-rm="${k}" aria-label="Remove photo">×</button></span>`).join(""); };
+  $("fPh").addEventListener("click",e=>{ const b=e.target.closest("[data-rm]"); if(b){ pending.splice(+b.dataset.rm,1); draw(); } });
+  const add=async fs=>{ for(const f of fs){ try{ pending.push(await readPhoto(f)); }catch{} } draw(); };
+  $("fCam").onclick=()=>$("fCamF").click(); $("fLib").onclick=()=>$("fLibF").click();
+  $("fCamF").onchange=e=>{ add([...e.target.files]); e.target.value=""; }; $("fLibF").onchange=e=>{ add([...e.target.files]); e.target.value=""; };
+  $("fInspect").onclick=()=>openInspection(treeId);
+  $("fSave").onclick=async()=>{ if(!issue){ $("fErr").textContent="Pick what's wrong."; return; }
+    const note=$("fNote").value.trim();
+    const r=await save("records",newRecord({treeId,task:issue[1],priority:$("fPri").value,woId:$("fWO").value,description:[`Flagged in the field ${fdate(today())}${me()?` by ${me()}`:""}: ${issue[0]}.`,note].filter(Boolean).join("\n")}));
+    if(pending.length) await putMany("photos",pending.map((d,k)=>({id:r.id+"-p"+k,treeId,recId:r.id,date:today(),data:d,updated:new Date().toISOString()})));
+    if(issue[1]==="Remove Tree"&&t.condition!=="Dead") await save("trees",{...t,condition:t.condition||"Poor"});
+    toast(`Flagged: ${issue[0]} · work record ${r.wrId}`); closeModal(); };
+}
+
+/* ================= field: plant a tree ================= */
+function speciesList(){ const m=new Map(); for(const t of S.trees.values()) if(t.common&&t.botanical&&!/vacant|stump/i.test(t.common)) m.set(t.common,t.botanical); return m; }
+async function openPlant(opt){
+  opt=opt||{}; let site=opt.siteId?S.trees.get(opt.siteId):null, p=null;
+  if(!site){ openModal(`${hdr("Plant a tree","Finding your location…")}<div class="body"><div class="empty">Getting a GPS fix. Stand at the new tree.</div></div>`); wireClose();
+    try{ p=await getFix(); }catch{ $("sheet").querySelector(".body").innerHTML=`<div class="err">Couldn't get your location. You can still add the tree from the Trees tab.</div>`; return; } }
+  const sp=speciesList(); const pos=site&&site.lat!=null?{lat:site.lat,lng:site.lng}:p;
+  const sites=!site&&p?nearestTrees(p,6,150).filter(([, ,t])=>t.status==="Planting site"||t.status==="Removed"||t.status==="Stump"):[];
+  const near=pos?nearestTrees(pos,1,800)[0]:null;
+  openModal(`${hdr(site?`Record planting at #${esc(site.tag)}`:"Plant a tree", pos?`${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`:"")}
+  <div class="body">
+    ${sites.length?`<div class="f wide">Planting at one of these sites?<div class="near">${sites.map(([d,id,t])=>`<button data-site="${esc(id)}"><span class="d">${fmtDist(d)}</span><span><b>${esc(t.status)}</b> #${esc(t.tag)}<span class="sec">${esc(t.address||"")}${t.notes?" · "+esc(t.notes.slice(0,60)):""}</span></span><span></span></button>`).join("")}</div><div class="note">Pick one to convert that site, or fill in the form below for a new location.</div></div>`:""}
+    <fieldset>
+      <label class="f">Species (common name)<input type="text" id="pCommon" list="spList" placeholder="e.g. Kentucky coffeetree"></label>
+      <label class="f">Scientific name<input type="text" id="pBot"></label>
+      <label class="f">Caliper / DBH (in)<input type="number" inputmode="decimal" id="pDbh" step="0.25" min="0" value="1.5"></label>
+      <label class="f">Date planted<input type="date" id="pDate" value="${today()}"></label>
+      <label class="f wide">Address<input type="text" id="pAddr" value="${esc(site?site.address||"":near?near[2].address||"":"")}"></label>
+      <label class="f">Growing space<select id="pSite">${opts(SITES,site?site.site:(near?near[2].site:""),"Choose")}</select></label>
+      <label class="f">Side<select id="pSide">${opts(SIDES,site?site.side:"","Choose")}</select></label>
+      <label class="f">Irrigation<input type="text" id="pIrr" value="${esc(site?site.irrigation||"":"")}" placeholder="e.g. Inline Drip Netafim"></label>
+      <label class="f">Crew<input type="text" id="pCrew" list="crewList" value="${esc(me())}"></label>
+    </fieldset>
+    <label class="f wide">Notes<textarea id="pNotes" placeholder="Stock source, stakes, gator bag, etc."></textarea></label>
+    <label class="check"><input type="checkbox" id="pWater" checked> Add a watering work record for the establishment period</label>
+    <div class="err" id="pErr"></div>
+  </div>
+  <footer><span class="spacer"></span><button class="btn" id="mCancel">Cancel</button><button class="btn primary big" id="pSave">Save planting</button></footer>
+  <datalist id="spList">${[...sp.keys()].sort().map(k=>`<option value="${esc(k)}"></option>`).join("")}</datalist>`);
+  wireClose(); $("mCancel").onclick=closeModal;
+  $("pCommon").addEventListener("change",()=>{ const b=sp.get($("pCommon").value.trim()); if(b&&!$("pBot").value) $("pBot").value=b; });
+  $("sheet").querySelectorAll("[data-site]").forEach(b=>b.onclick=()=>openPlant({siteId:b.dataset.site}));
+  $("pSave").onclick=async()=>{ const common=$("pCommon").value.trim(); if(!common){ $("pErr").textContent="Enter the species."; return; }
+    const d=$("pDate").value||today(), crew=$("pCrew").value.trim(); if(crew) ls.set("inspector",ls.get("inspector")||crew);
+    const base=site?{...site}:{id:newId("n"),tag:nextTag(),created:new Date().toISOString(),lat:+pos.lat.toFixed(7),lng:+pos.lng.toFixed(7),trimArea:near?near[2].trimArea||"":"",area:near?near[2].area||"":"",ward:near?near[2].ward||"":"",treeType:"Public"};
+    const t=await save("trees",{...base,status:"Active",common,botanical:$("pBot").value.trim(),dbh:Number($("pDbh").value)||null,condition:"Good",address:$("pAddr").value.trim(),site:$("pSite").value,side:$("pSide").value,
+      irrigation:$("pIrr").value.trim(),planted:d,size:"Small",notes:[`Planted ${fdate(d)}${crew?` by ${crew}`:""}.`,$("pNotes").value.trim(),site&&site.notes?`Previous site notes: ${site.notes}`:""].filter(Boolean).join(" ")});
+    const pr=newRecord({treeId:t.id,task:"Plant Tree",priority:"Priority 4 Routine",description:`Planted ${common}${$("pNotes").value.trim()?". "+$("pNotes").value.trim():""}`});
+    await save("records",{...pr,status:"Completed",completed:d,crew});
+    if($("pWater").checked) await save("records",newRecord({treeId:t.id,task:"Watering",priority:"Priority 3 ASAP",description:"Establishment watering for new planting."}));
+    toast(`${common} planted · tree #${t.tag}`); openTree(t.id); };
+}
+
+/* ================= service route ================= */
+function routeOrder(pts,start){
+  if(pts.length<2) return pts.slice();
+  const rem=pts.slice(); const out=[]; let cur=start||null;
+  if(!cur){ rem.sort((a,b)=>a.lng-b.lng); cur=rem.shift(); out.push(cur); }
+  while(rem.length){ let bi=0, bd=Infinity; for(let i=0;i<rem.length;i++){ const d=distFt(cur,rem[i]); if(d<bd){ bd=d; bi=i; } } cur=rem.splice(bi,1)[0]; out.push(cur); }
+  // 2-opt improvement on the open path
+  const D=(a,b)=>distFt(a,b); let improved=true, it=0; const n=out.length; const s0=start?[start,...out]:out;
+  while(improved&&it<40&&n<=400){ improved=false; it++;
+    for(let i=1;i<s0.length-2;i++) for(let k=i+1;k<s0.length-1;k++){ const a=s0[i-1],b=s0[i],c=s0[k],d=s0[k+1];
+      if(D(a,c)+D(b,d) < D(a,b)+D(c,d)-1){ s0.splice(i,k-i+1,...s0.slice(i,k+1).reverse()); improved=true; } } }
+  return start?s0.slice(1):s0;
+}
+function routeLength(seq,start){ let L0=0, prev=start||null; for(const p of seq){ if(prev) L0+=distFt(prev,p); prev=p; } return L0; }
+function mapsLinks(seq,start){ const pts=(start?[start]:[]).concat(seq).map(p=>`${(+p.lat).toFixed(6)},${(+p.lng).toFixed(6)}`); const links=[];
+  for(let i=0;i<pts.length-1;i+=9){ const leg=pts.slice(i,i+10); if(leg.length<2) break; links.push(`https://www.google.com/maps/dir/?api=1&origin=${leg[0]}&destination=${leg[leg.length-1]}${leg.length>2?`&waypoints=${encodeURIComponent(leg.slice(1,-1).join("|"))}`:""}&travelmode=driving`); }
+  return links; }
+function openRoute(recIds,woId){
+  const recs=recIds.map(id=>S.recs.get(id)).filter(r=>r);
+  const located=recs.map(r=>{ const t=r.treeId&&S.trees.get(r.treeId); const lat=t?t.lat:r.lat, lng=t?t.lng:r.lng; return lat!=null&&lng!=null?{id:r.id,lat,lng,r,t}:null; }).filter(Boolean);
+  const missing=recs.length-located.length;
+  // group records at the same tree into one stop
+  const stopsMap=new Map(); located.forEach(p=>{ const k=p.r.treeId||`${p.lat},${p.lng}`; if(!stopsMap.has(k)) stopsMap.set(k,{lat:p.lat,lng:p.lng,items:[],t:p.t}); stopsMap.get(k).items.push(p.r); });
+  const stops=[...stopsMap.values()];
+  let useMe=!!S.me; let seq=routeOrder(stops,useMe?S.me:null);
+  const draw=()=>{ const start=useMe?S.me:null; const L1=routeLength(seq,start); const links=mapsLinks(seq,start);
+    $("rtSummary").innerHTML=`<b>${seq.length} stops</b> for ${located.length} work record${located.length===1?"":"s"} · about ${(L1/5280).toFixed(1)} miles straight-line${start?" from your location":""}.${missing?` ${missing} record${missing>1?"s have":" has"} no location and ${missing>1?"are":"is"} left off.`:""}`;
+    $("rtLinks").innerHTML=links.map((u,i)=>`<a class="btn small" href="${u}" target="_blank" rel="noopener">Google Maps ${links.length>1?`leg ${i+1}`:"directions"}</a>`).join("");
+    $("rtList").innerHTML=seq.map((st,i)=>`<div><span class="stopnum">${i+1}</span><span><b>${esc(st.items.map(r=>r.task).join(" + "))}</b><span class="sec">${st.t?`#${esc(st.t.tag)} · ${esc(st.t.common||"")} · `:""}${esc(st.items[0].address||"")}</span></span><span class="sec">${i?fmtDist(distFt(seq[i-1],st)):(start?fmtDist(distFt(start,st)):"start")}</span></div>`).join("");
+    if(rmap){ rlayer.clearLayers(); const ll=(start?[[start.lat,start.lng]]:[]).concat(seq.map(s=>[s.lat,s.lng])); L.polyline(ll,{color:"#2c6a43",weight:4,opacity:.8}).addTo(rlayer);
+      if(start) L.marker([start.lat,start.lng],{icon:L.divIcon({className:"",html:'<div class="me-dot"></div>',iconSize:[16,16]})}).addTo(rlayer);
+      seq.forEach((st,i)=>L.marker([st.lat,st.lng],{icon:L.divIcon({className:"",html:`<div class="stopnum">${i+1}</div>`,iconSize:[24,24]})}).addTo(rlayer).bindTooltip(`${i+1}. ${st.items.map(r=>r.task).join(" + ")} · ${st.items[0].address||""}`));
+      if(ll.length) rmap.fitBounds(ll,{padding:[24,24]}); } };
+  openModal(`${hdr("Suggested service route", woId?`WO ${esc(S.ords.get(woId).woNum)} · ${esc(S.ords.get(woId).name||"")}`:`${recs.length} selected work records`)}
+  <div class="body">
+    <div id="routeMap"></div>
+    <div class="note" id="rtSummary"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="rtLinks"></div>
+    ${S.me?`<label class="check"><input type="checkbox" id="rtMe" checked> Start from my current location</label>`:`<div class="note">Turn on location (Nearby → Use my location) to start the route from where you are.</div>`}
+    <div class="note">The order is suggested from straight-line distances between stops (nearest stop next, then untangled). Google Maps works out the actual driving directions.</div>
+    <div class="rows" id="rtList"></div>
+  </div>
+  <footer><span class="spacer"></span><button class="btn" id="mCancel">Close</button>${woId?`<button class="btn primary" id="rtSave">Use this order for the crew sheet</button>`:`<button class="btn primary" id="rtWO">Create work order in this order</button>`}</footer>`);
+  wireClose(); $("mCancel").onclick=()=>{ if(woId) openOrder(woId); else closeModal(); };
+  let rmap=null, rlayer=null;
+  if(typeof L!=="undefined"){ rmap=L.map("routeMap"); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20,maxNativeZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(rmap); rlayer=L.layerGroup().addTo(rmap); setTimeout(()=>{ rmap.invalidateSize(); draw(); },60); }
+  else { $("routeMap").innerHTML=`<div class="empty pad">The map needs a connection. The stop order below still works.</div>`; }
+  draw();
+  if($("rtMe")) $("rtMe").onchange=e=>{ useMe=e.target.checked; seq=routeOrder(stops,useMe?S.me:null); draw(); };
+  const applySeq=async wid=>{ let n=0; for(const st of seq) for(const r of st.items){ await save("records",{...S.recs.get(r.id),routeSeq:n++,woId:wid||S.recs.get(r.id).woId}); } };
+  if($("rtSave")) $("rtSave").onclick=async()=>{ await applySeq(woId); toast("Route order saved. The crew sheet follows it."); openOrder(woId); };
+  if($("rtWO")) $("rtWO").onclick=async()=>{ const o=await save("orders",newOrder({name:`Route ${fdate(today())}`})); await applySeq(o.id); for(const r of recs) if(!located.find(p=>p.id===r.id)) await save("records",{...r,woId:o.id}); S.sel.clear(); toast(`WO ${o.woNum} created in route order`); openOrder(o.id); };
+}
+
+/* ================= phone ↔ desktop merge ================= */
+async function sendChanges(){
+  const since=ls.get("lastSyncSent")||""; const dev=(ls.get("deviceName")||"device").replace(/[^\w-]+/g,"-");
+  const pick=m=>[...m.values()].filter(x=>x.local&&(!since||(x.updated||"")>since));
+  const photos=(await getAll("photos")).filter(p=>!since||(p.updated||"")>since);
+  const data={app:"reno-tree-field",kind:"changes",version:2,device:ls.get("deviceName")||"",since,exported:new Date().toISOString(),
+    trees:pick(S.trees),records:pick(S.recs),orders:pick(S.ords),inspections:pick(S.insp),requests:pick(S.reqs),photos,deleted:JSON.parse(ls.get("deleted")||"[]")};
+  const n=STORES.reduce((a,k)=>a+data[k].length,0);
+  if(!n&&!photos.length){ $("syncMsg").textContent=since?`Nothing has changed here since ${fdate(since)}.`:"Nothing has been added or edited on this device yet."; return; }
+  const blob=new Blob([JSON.stringify(data)],{type:"application/json"}); await shareOrSave(`reno-trees-changes-${dev}-${today()}.json`,blob,"Tree app changes");
+  ls.set("lastSyncSent",data.exported);
+  $("syncMsg").textContent=`Sent ${n} changed record${n===1?"":"s"} and ${photos.length} photo${photos.length===1?"":"s"}. Open the file on the other device and use “Merge changes or a backup”.`;
+}
+async function mergeFiles(files){
+  let tot=0, newer=0, older=0, ph=0;
+  for(const f of files){ let data; try{ data=JSON.parse(await f.text()); }catch{ $("syncMsg").textContent=`${f.name} isn't a file from this app.`; return; }
+    if(data.app!=="reno-tree-field"){ $("syncMsg").textContent=`${f.name} isn't a file from this app.`; return; }
+    for(const s of STORES){ const m=MAPS[s](); const up=[];
+      for(const x of data[s]||[]){ tot++; const ex=m.get(x.id); if(!ex||(x.updated||"")>(ex.updated||"")){ up.push(x); newer++; } else older++; }
+      if(up.length) await bulk(s,up); }
+    for(const [s,id] of data.deleted||[]){ if(STORES.includes(s)&&MAPS[s]().has(id)){ await del(s,id); MAPS[s]().delete(id); } }
+    if(data.photos&&data.photos.length){ const have=new Set((await getAll("photos")).map(p=>p.id)); const add=data.photos.filter(p=>!have.has(p.id)); ph+=add.length; for(let i=0;i<add.length;i+=50) await putMany("photos",add.slice(i,i+50)); }
+  }
+  rebuildTagIndex(); gridN=-1; S._ver=(S._ver||0)+1; refreshDynFilters._s=""; render();
+  $("syncMsg").textContent=`Merged ${newer.toLocaleString()} new or newer records${ph?` and ${ph} photos`:""}. ${older?`${older.toLocaleString()} were already up to date here.`:""}`;
+}
+
+/* ================= PDFs ================= */
+function imgSize(src){ return new Promise(r=>{ const i=new Image(); i.onload=()=>r([i.naturalWidth,i.naturalHeight]); i.onerror=()=>r(null); i.src=src; }); }
+const GREEN=[44,106,67];
+function pdfHeader(doc,title,num){ const W=612, M=40; doc.setFillColor(...GREEN); doc.rect(0,0,W,64,"F"); doc.setTextColor(255); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+  doc.text("CITY OF RENO · URBAN FORESTRY",M,24); doc.setFontSize(20); doc.text(title,M,48); doc.setFontSize(16); doc.text(num,W-M,40,{align:"right"}); doc.setTextColor(20); }
+function pdfFooter(doc){ const n=doc.getNumberOfPages(); for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(110);
+  doc.text(`Generated ${new Date().toLocaleString()} · Reno Tree Inventory field app`,40,772); doc.text(`Page ${i} of ${n}`,572,772,{align:"right"}); } }
+async function pdfRecord(r){
+  const t=r.treeId?S.trees.get(r.treeId):null;
+  if(!window.jspdf){ printFallback(`Work record ${r.wrId}`,[[r,t]],null); return; }
+  let photo=null; if(t){ const ps=await byTree("photos",t.id); ps.sort((a,b)=>String(b.date).localeCompare(String(a.date))); photo=ps[0]||null; }
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"pt",format:"letter"}); const W=612, M=40; let y=88;
+  pdfHeader(doc,"Tree Work Sheet",`WR ${r.wrId}`);
+  const pc=PRI_C[r.priority]==="crit"?[179,54,46]:PRI_C[r.priority]==="warn"?[169,109,18]:[53,106,159];
+  doc.setDrawColor(...pc); doc.setLineWidth(1.5); doc.setTextColor(...pc); doc.setFontSize(12); doc.setFont("helvetica","bold");
+  const ptxt=priShort(r.priority).toUpperCase(); const pw=doc.getTextWidth(ptxt)+16; doc.roundedRect(M,y-14,pw,22,3,3); doc.text(ptxt,M+8,y+1);
+  doc.setTextColor(20); doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.text(`Status: ${r.status}    Created: ${fdate(r.created)||"—"}    Due: ${fdate(r.due)||"—"}`,M+pw+14,y+1); y+=26;
+  const section=title=>{ y+=8; doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...GREEN); doc.text(title.toUpperCase(),M,y); doc.setDrawColor(200); doc.setLineWidth(.5); doc.line(M,y+4,W-M,y+4); y+=18; doc.setTextColor(20); };
+  const kv=(pairs,cols,width)=>{ const cw=(width||(W-2*M))/cols; let col=0,rowH=0,y0=y;
+    for(const [k,v] of pairs){ const x=M+col*cw; doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(100); doc.text(k.toUpperCase(),x,y0);
+      doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor(20); const lines=doc.splitTextToSize(String(v||"—"),cw-10); doc.text(lines,x,y0+12);
+      rowH=Math.max(rowH,12+lines.length*12.5); col++; if(col===cols){ col=0; y0+=rowH+8; rowH=0; } } y=y0+(col?rowH+8:0); };
+  const wo=r.woId&&S.ords.get(r.woId);
+  section("Work"); kv([["Task",r.task],["Category",r.category||catOf(r.task)],["Crew",r.crew||"Unassigned"],["Equipment",r.equipment],["Work order",wo?`WO ${wo.woNum} · ${wo.name}`:""],["Service request",r.srId?`#${r.srId}`:""]],3);
+  section("Tree and site");
+  const pairs=[["Tree ID",t?"#"+t.tag:r.treeTag],["Species",t?[t.common,t.botanical?`(${t.botanical})`:""].filter(Boolean).join(" "):r.common],["Address",r.address],
+    ["DBH / height",t?`${t.dbh!=null?t.dbh+'"':"—"} / ${t.heightRange||"—"}`:""],["Condition / risk",t?`${t.condition||"—"} / ${t.risk||"Not rated"}`:""],["Growing space / side",t?[t.site,t.side].filter(Boolean).join(" / "):""],
+    ["Area / trim cycle",t?[t.area,t.trimArea?`Trim ${t.trimArea}`:""].filter(Boolean).join(" · "):""],["Utilities",t?[t.wires?"OVERHEAD WIRES":"",t.utilities&&t.utilities!=="Overhead"?t.utilities:""].filter(Boolean).join(", "):""],
+    ["Coordinates",(t&&t.lat!=null)?`${t.lat.toFixed(6)}, ${t.lng.toFixed(6)}`:(r.lat!=null?`${r.lat}, ${r.lng}`:"")]];
+  if(photo){ const sz=await imgSize(photo.data); const box=170; let pw2=box,ph2=box; if(sz){ const s=Math.min(box/sz[0],box/sz[1]); pw2=sz[0]*s; ph2=sz[1]*s; }
+    const yTop=y; kv(pairs,2,W-2*M-box-16); try{ doc.addImage(photo.data,"JPEG",W-M-pw2,yTop-8,pw2,ph2); doc.setFontSize(8); doc.setTextColor(100); doc.text(`Photo ${fdate(photo.date)}`,W-M-pw2,yTop-8+ph2+10); }catch{}
+    y=Math.max(y,yTop+ph2+14); doc.setTextColor(20); } else kv(pairs,3);
+  section("Description / scope"); doc.setFont("helvetica","normal"); doc.setFontSize(11);
+  const sl=doc.splitTextToSize(r.description||"—",W-2*M); doc.text(sl,M,y); y+=sl.length*14+6;
+  if(t&&t.notes){ doc.setFontSize(9.5); doc.setTextColor(90); const nl=doc.splitTextToSize("Tree notes: "+t.notes,W-2*M); doc.text(nl,M,y); y+=nl.length*12+4; doc.setTextColor(20); }
+  if(y>560){ doc.addPage(); y=50; }
+  section("Completion (crew to fill in)"); doc.setFontSize(10.5);
+  const line=(label,x,wd)=>{ doc.setTextColor(90); doc.text(label,x,y); doc.setDrawColor(140); doc.line(x+doc.getTextWidth(label)+6,y+2,x+wd,y+2); };
+  line("Date completed",M,180); line("Crew",M+196,350); line("Hours",M+366,W-2*M); y+=28; line("Equipment used",M,W-2*M); y+=24;
+  doc.setTextColor(90); doc.text("Work performed / notes",M,y); y+=8; doc.setDrawColor(170); doc.rect(M,y,W-2*M,90);
+  if(r.status==="Completed"){ doc.setTextColor(20); doc.text(doc.splitTextToSize(`${fdate(r.completed)}${r.crew?` · ${r.crew}`:""}${r.hours!=null?` · ${r.hours} hrs`:""}`,W-2*M-16),M+8,y+16); }
+  y+=110; doc.setDrawColor(20); doc.line(M,y+20,M+240,y+20); doc.line(W-M-240,y+20,W-M,y+20);
+  doc.setFontSize(9); doc.setTextColor(90); doc.text("Crew lead signature / date",M,y+32); doc.text("Supervisor signature / date",W-M-240,y+32);
+  pdfFooter(doc);
+  await shareOrSave(`WR_${r.wrId}${t?"_"+t.tag:""}.pdf`.replace(/[^\w.\-]/g,"_"), doc.output("blob"), `Work record ${r.wrId}`);
+}
+async function pdfOrder(o){
+  const recs=recsInOrder(o.id); const pairs=recs.map(r=>[r,r.treeId?S.trees.get(r.treeId):null]);
+  if(!window.jspdf){ printFallback(`Work order ${o.woNum} · ${o.name}`,pairs,o); return; }
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"pt",format:"letter"}); const W=612, M=40; let y=88;
+  pdfHeader(doc,"Crew Work Order",`WO ${o.woNum}`);
+  doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text(doc.splitTextToSize(o.name||"Work order",W-2*M),M,y); y+=20;
+  doc.setFont("helvetica","normal"); doc.setFontSize(10.5);
+  doc.text(`Assigned to: ${o.assignee||"—"}     Priority: ${o.priority||"—"}     Issued: ${fdate(o.created)||"—"}     Due: ${fdate(o.due)||"—"}     ${recs.length} work records`,M,y); y+=16;
+  if(o.notes){ doc.setTextColor(60); const nl=doc.splitTextToSize("Notes: "+o.notes,W-2*M); doc.text(nl,M,y); y+=nl.length*13+4; doc.setTextColor(20); }
+  const totalsByTask={}; recs.forEach(r=>totalsByTask[r.task]=(totalsByTask[r.task]||0)+1);
+  doc.setFontSize(9.5); doc.setTextColor(90); doc.text(doc.splitTextToSize(Object.entries(totalsByTask).map(([k,v])=>`${v} × ${k}`).join("   "),W-2*M),M,y); y+=18; doc.setTextColor(20);
+  const cols=[["#",18],["Tree",44],["Address",118],["Species",90],["DBH",30],["Task",104],["Equip.",58],["Done",30],["Hrs",40]];
+  const head=()=>{ doc.setFillColor(...GREEN); doc.rect(M,y-11,W-2*M,16,"F"); doc.setTextColor(255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5); let x=M+3; cols.forEach(([h,w])=>{ doc.text(h,x,y); x+=w; }); y+=12; doc.setTextColor(20); doc.setFont("helvetica","normal"); };
+  head();
+  pairs.forEach(([r,t],i)=>{
+    doc.setFontSize(8.5);
+    const cells=[String(i+1),r.treeTag||"—",r.address||"",t?t.common||"":r.common||"",t&&t.dbh!=null?t.dbh+'"':"",r.task||"",r.equipment||"","",""];
+    const wrapped=cells.map((c,k)=>doc.splitTextToSize(c,cols[k][1]-6));
+    let h=Math.max(...wrapped.map(w=>w.length))*10+6;
+    const extra=[t&&t.wires?"Overhead wires":"",r.description?r.description.replace(/\s+/g," ").slice(0,220):""].filter(Boolean).join(" · ");
+    const el=extra?doc.splitTextToSize(extra,W-2*M-70):[]; h+=el.length*9.5;
+    if(y+h>740){ doc.addPage(); y=50; head(); }
+    if(i%2===0){ doc.setFillColor(244,246,242); doc.rect(M,y-9,W-2*M,h,"F"); }
+    let x=M+3; wrapped.forEach((w,k)=>{ doc.text(w,x,y); x+=cols[k][1]; });
+    const bx=M+cols.slice(0,7).reduce((a,c)=>a+c[1],0)+6; doc.setDrawColor(90); doc.setLineWidth(.8); doc.rect(bx,y-8,10,10);
+    if(!isOpenWR(r)){ doc.line(bx+2,y-3,bx+4.5,y); doc.line(bx+4.5,y,bx+9,y-7); }
+    const hx=bx+30; doc.setDrawColor(150); doc.line(hx-6,y+2,hx+28,y+2); if(r.hours!=null) doc.text(String(r.hours),hx-4,y);
+    if(el.length){ doc.setTextColor(90); doc.setFontSize(8); doc.text(el,M+65,y+Math.max(...wrapped.map(w=>w.length))*10); doc.setTextColor(20); }
+    y+=h;
+  });
+  if(y>640){ doc.addPage(); y=50; }
+  y+=16; doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...GREEN); doc.text("CLOSEOUT",M,y); doc.setDrawColor(200); doc.line(M,y+4,W-M,y+4); y+=20; doc.setTextColor(90); doc.setFont("helvetica","normal");
+  doc.text("Total hours",M,y); doc.setDrawColor(140); doc.line(M+60,y+2,M+170,y+2); doc.text("Date finished",M+190,y); doc.line(M+260,y+2,M+380,y+2); y+=14;
+  doc.setDrawColor(170); doc.rect(M,y,W-2*M,60); if(o.closeout){ doc.setTextColor(20); doc.text(doc.splitTextToSize(o.closeout,W-2*M-16),M+8,y+14); } y+=80;
+  doc.setDrawColor(20); doc.line(M,y+16,M+240,y+16); doc.line(W-M-240,y+16,W-M,y+16); doc.setFontSize(9); doc.setTextColor(90); doc.text("Crew lead signature / date",M,y+28); doc.text("Supervisor signature / date",W-M-240,y+28);
+  pdfFooter(doc);
+  await shareOrSave(`WO_${o.woNum}_${(o.name||"").slice(0,40)}.pdf`.replace(/[^\w.\-]/g,"_"), doc.output("blob"), `Work order ${o.woNum}`);
+}
+function printFallback(title,pairs,o){
+  const rows=pairs.map(([r,t],i)=>`<tr><td>${i+1}</td><td>${esc(r.treeTag||"")}</td><td>${esc(r.address||"")}</td><td>${esc(t?t.common:r.common||"")}</td><td>${t&&t.dbh!=null?t.dbh+'"':""}</td><td>${esc(r.task||"")}<div class="d">${esc(r.description||"")}</div></td><td>${esc(r.equipment||"")}</td><td>☐</td><td></td></tr>`).join("");
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>body{font:12px Arial,sans-serif;margin:16px}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}th{background:#2c6a43;color:#fff}.d{color:#555;font-size:11px}.bar button{font:inherit;padding:8px 14px;margin-bottom:10px}@media print{.bar{display:none}}</style></head><body>
+  <div class="bar"><button onclick="print()">Print or save as PDF</button></div><div style="font-size:11px;letter-spacing:.08em">CITY OF RENO · URBAN FORESTRY</div><h1>${esc(title)}</h1>
+  ${o?`<p>Assigned to: ${esc(o.assignee||"—")} · Priority: ${esc(o.priority||"—")} · Due: ${fdate(o.due)||"—"}</p>${o.notes?`<p>${esc(o.notes)}</p>`:""}`:""}
+  <table><tr><th>#</th><th>Tree</th><th>Address</th><th>Species</th><th>DBH</th><th>Task</th><th>Equip.</th><th>Done</th><th>Hrs</th></tr>${rows}</table>
+  <p style="margin-top:40px">Crew lead signature / date ______________________ &nbsp;&nbsp; Supervisor ______________________</p></body></html>`;
+  const url=URL.createObjectURL(new Blob([html],{type:"text/html"})); if(!window.open(url,"_blank")){ saveFile(title.replace(/[^\w]+/g,"_")+".html",html,"text/html"); toast("Saved a printable sheet. Open it and print to PDF."); }
+}
+
+/* ================= CSV import ================= */
+function parseCSV(text){
+  // A quote opens a quoted field only at the start of a field; elsewhere it's a literal (e.g. 12" DBH).
+  const rows=[]; let row=[], cell="", q=false, start=true;
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else if(c==='"'&&start){ q=true; start=false; }
+    else if(c===","){ row.push(cell); cell=""; start=true; }
+    else if(c==="\n"||c==="\r"){ if(c==="\r"&&text[i+1]==="\n") i++; row.push(cell); rows.push(row); row=[]; cell=""; start=true; }
+    else { cell+=c; start=false; } }
+  if(cell!==""||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(x=>x.trim()!==""));
+}
+const usDate = s => { s=String(s||"").trim(); let m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s); if(m) return `${m[3]}-${pad(m[1],2)}-${pad(m[2],2)}`; if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10); return ""; };
+const numOr = s => { const v=parseFloat(s); return isNaN(v)?null:v; };
+function commonName(s){ s=String(s||"").trim(); if(!s) return ""; const p=s.split(","); if(p.length===2) s=`${p[1].trim()} ${p[0].trim()}`; return s[0].toUpperCase()+s.slice(1); }
+function kindOf(head){
+  if(head.includes("Tree Primary ID")) return "trees";
+  if(head.includes("WR ID")) return "records";
+  if(head.includes("Inspection ID")) return "inspections";
+  if(head.includes("Service Request ID")) return "requests";
+  if(head.includes("Work Order ID")&&head.includes("Work Order Name")) return "orders";
+  if(head.includes("Tree ID")&&head.includes("Common name")) return "apptrees";
+  return null;
+}
+const KIND_ORDER={trees:0,apptrees:0,orders:1,records:2,inspections:3,requests:4};
+const KIND_LABEL={trees:"trees",apptrees:"trees",orders:"work orders",records:"work records",inspections:"inspections",requests:"service requests"};
+function fromTreePlotterTree(g){
+  let cn=commonName(g("Common Name")), sci=g("Scientific Name"); const st=g("Status");
+  const vacant=/^vacant/i.test(cn)||/^vacant/i.test(sci);
+  const status= vacant||st.startsWith("Proposed")?"Planting site": st==="Removed"?"Removed": (st==="Stump"||/^stump$/i.test(cn))?"Stump": st==="Dead"?"Dead":"Active";
+  if(vacant){ cn="Vacant site"; sci=""; }
+  const notes=[]; if(st.startsWith("Proposed")) notes.push(st);
+  for(const k of ["Tree Comments","Maintenance Comments"]){ const v=g(k); if(v&&v!==".") notes.push(v); }
+  if(g("Plaque")==="Yes") notes.push("Plaque"+(g("Plaque Notes")?": "+g("Plaque Notes"):""));
+  if(g("Clearance Conflicts")) notes.push("Clearance conflicts: "+g("Clearance Conflicts"));
+  const a=usDate(g("Inspected Date")), b=usDate(g("Last Inspection"));
+  let hr=g("Height Range"); if(hr==="N/A") hr=""; if(!hr) hr=g("Original Height Range (TreeKeeper)");
+  return {tag:g("Tree Primary ID")||g("TreeKeeper Site ID"),common:cn,botanical:sci,dbh:numOr(g("DBH")),condition:g("Condition"),risk:g("Risk Rating"),status,
+    address:g("Address"),site:g("Growing Space"),side:g("Side"),area:g("Area")==="Unassigned"?"":g("Area"),treeType:g("Tree Type"),size:g("Size Rating"),trimArea:g("Trim Cycle Areas"),ward:g("Ward"),
+    irrigation:g("Irrigation"),utilities:g("Utilities"),wires:g("Utilities")==="Overhead"||g("Wires").startsWith("Present"),lat:numOr(g("Latitude")),lng:numOr(g("Longitude")),
+    inspected:a>b?a:b,keeperId:g("TreeKeeper Site ID"),plaque:g("Plaque")==="Yes",notes:notes.join("; "),heightRange:hr,source:"TreePlotter"};
+}
+const APP_COLS=[["Tree ID","tag"],["Common name","common"],["Scientific name","botanical"],["DBH (in)","dbh"],["Height range","heightRange"],["Condition","condition"],["Risk","risk"],["Status","status"],["Address","address"],["Growing space","site"],["Side","side"],["Area","area"],["Tree type","treeType"],["Size rating","size"],["Trim cycle area","trimArea"],["Ward","ward"],["Irrigation","irrigation"],["Utilities","utilities"],["Overhead wires","wires"],["Latitude","lat"],["Longitude","lng"],["Last inspected","inspected"],["Last pruned","pruned"],["TreeKeeper site ID","keeperId"],["Notes","notes"]];
+function fromAppTree(g){ const t={}; for(const [h,k] of APP_COLS){ const v=g(h); if(["dbh","lat","lng"].includes(k)) t[k]=numOr(v); else if(k==="wires") t[k]=/^(true|yes|1)$/i.test(v); else t[k]=v; } return t; }
+const WR_PRI_FIX = p => p==="No Priority"?"No Priority":p;
+function fromTPRecord(g){
+  const tag=g("Primary ID"); const tr=tag?treeByTag(tag):null; const t=tr?tr[1]:null;
+  let st=g("WR Status"); const done=usDate(g("Date Completed")); if(!st) st=done?"Completed":"Requested";
+  const woRaw=g("WO ID");
+  return {id:"wr-"+g("WR ID"),wrId:g("WR ID"),status:st,task:g("Work Task")||g("Work Category")||"",category:g("Work Category")||catOf(g("Work Task")),priority:WR_PRI_FIX(g("Priority")),
+    treeId:tr?tr[0]:null,treeTag:tag,address:g("Address")||(t?t.address:""),common:t?t.common:commonName(g("Common Name")),lat:t?t.lat:null,lng:t?t.lng:null,
+    crew:g("Crew"),equipment:g("Equipment"),hours:numOr(g("Hours")),created:usDate(g("Date Created")),due:usDate(g("Due Date")),completed:done,description:g("Description"),
+    woId:woRaw?"wo-"+woRaw:"",srId:g("Created From Service Request ID"),createdBy:g("Created By"),photoNames:g("Photos"),source:"TreePlotter"};
+}
+function fromTPOrder(g){ return {id:"wo-"+g("Work Order ID"),woNum:g("Work Order ID"),name:g("Work Order Name")||(g("Notes")||"").slice(0,50)||`Work order ${g("Work Order ID")}`,
+  status:g("Status")||"Created",priority:g("Priority"),assignee:g("Assigned To"),created:usDate(g("Date Created")),due:"",notes:g("Notes"),closeout:g("Closeout Notes"),
+  address:g("Client Address"),category:g("Work Category"),createdBy:g("Created By"),source:"TreePlotter"}; }
+function fromTPInspection(g){ const tag=g("Inventory ID"); const tr=tag?treeByTag(tag):null; const d=usDate(g("Date"));
+  if(!d&&!g("Inspection Notes")) return null;
+  return {id:"ti-"+g("Inspection ID"),treeId:tr?tr[0]:null,treeTag:tag,date:d,inspector:g("Inspected By"),dbh:numOr(g("DBH")),notes:g("Inspection Notes"),photoNames:g("Inspection Photos"),
+    treeWork:g("Tree Work"),defects:[],action:"",condition:"",source:"TreePlotter"}; }
+function fromTPRequest(g){ return {id:"sr-"+g("Service Request ID"),srId:g("Service Request ID"),status:g("Status")||"Open",complaint:g("Primary Complaint"),priority:g("Priority"),source:g("Request Source"),
+  address:[g("Request Address"),g("Request Zip")].filter(Boolean).join(" ").replace(/^Unknwon$/,""),lat:numOr(g("Latitude")),lng:numOr(g("Longitude")),comments:g("Comments"),notes:g("Notes"),
+  contactName:[g("First Name"),g("Last Name")].map(s=>s.trim()).filter(Boolean).join(" "),client:g("Client"),phone:g("Phone"),email:g("E-Mail"),created:usDate(g("Date Created")),due:usDate(g("Due Date")),
+  createdBy:g("Created By"),photoNames:g("Photos"),woRef:g("Work Order ID"),source_:"TreePlotter"}; }
+
+async function importFiles(files){
+  const prog=$("impProg"), bar=prog.firstElementChild, msg=$("impMsg"); prog.classList.remove("hidden"); bar.style.width="2%";
+  const parsed=[];
+  for(const f of files){ msg.textContent=`Reading ${f.name}…`; await new Promise(r=>setTimeout(r,20));
+    const rows=parseCSV((await f.text()).replace(/\\"/g,"'")); /* TreePlotter writes \" inside quoted fields */
+    if(rows.length<2){ parsed.push({f,kind:null,why:"no data rows"}); continue; }
+    const head=rows[0].map(h=>h.replace(/^﻿/,"").trim()); const kind=kindOf(head);
+    parsed.push({f,kind,head,rows:rows.slice(1),why:kind?"":"not a recognized TreePlotter export"}); }
+  parsed.sort((a,b)=>(KIND_ORDER[a.kind]??9)-(KIND_ORDER[b.kind]??9));
+  const report=[]; let step=0;
+  for(const p of parsed){
+    step++; bar.style.width=`${Math.round(step/parsed.length*100)}%`;
+    if(!p.kind){ report.push(`${p.f.name}: skipped (${p.why})`); continue; }
+    msg.textContent=`Importing ${KIND_LABEL[p.kind]} from ${p.f.name}…`; await new Promise(r=>setTimeout(r,20));
+    const idx={}; p.head.forEach((h,i)=>idx[h]=i);
+    let added=0, updated=0, kept=0; const out=[];
+    if(p.kind==="trees"||p.kind==="apptrees"){
+      const seen=new Set();
+      for(const row of p.rows){ const g=k=>(row[idx[k]]??"").trim(); const t=p.kind==="trees"?fromTreePlotterTree(g):fromAppTree(g); if(!t.tag) continue;
+        let key=String(t.tag).toLowerCase(); if(seen.has(key)){ let n=2; while(seen.has(key+"-"+n)) n++; t.tag+="-"+n; key+="-"+n; } seen.add(key);
+        const exId=tagIndex.get(key); let rec;
+        if(exId){ const ex=S.trees.get(exId); if(ex.local){ rec={...t,...ex,id:exId}; if(t.inspected>(ex.inspected||"")){ rec.inspected=t.inspected; rec.condition=t.condition||ex.condition; } kept++; }
+          else { rec={...ex,...t,id:exId}; if(ex.inspected>(t.inspected||"")){ rec.inspected=ex.inspected; rec.condition=ex.condition; } if(ex.pruned) rec.pruned=ex.pruned; updated++; } }
+        else { rec={...t,id:"t-"+key.replace(/[^\w-]/g,"_"),created:new Date().toISOString()}; added++; }
+        out.push(rec); tagIndex.set(key,rec.id); }
+      await bulk("trees",out);
+    } else {
+      const conv={records:fromTPRecord,orders:fromTPOrder,inspections:fromTPInspection,requests:fromTPRequest}[p.kind];
+      const store={records:"records",orders:"orders",inspections:"inspections",requests:"requests"}[p.kind]; const m=MAPS[store]();
+      for(const row of p.rows){ const g=k=>(row[idx[k]]??"").trim(); const x=conv(g); if(!x||x.id.endsWith("-")) continue;
+        const ex=m.get(x.id); if(ex&&ex.local){ kept++; continue; } if(ex) updated++; else added++; out.push(ex?{...ex,...x}:x); }
+      await bulk(store,out);
+      if(p.kind==="records") await derivePruned();
+      if(p.kind==="inspections"){ const ups=[]; for(const i of out){ const t=i.treeId&&S.trees.get(i.treeId); if(t&&i.date>(t.inspected||"")) ups.push({...t,inspected:i.date,dbh:i.dbh??t.dbh}); } if(ups.length) await bulk("trees",ups); }
+    }
+    report.push(`${KIND_LABEL[p.kind]}: ${added.toLocaleString()} added, ${updated.toLocaleString()} updated${kept?`, ${kept} kept as edited here`:""}`);
+  }
+  await put("meta",{k:"lastImport",at:new Date().toISOString(),files:files.map(f=>f.name)});
+  bar.style.width="100%"; msg.innerHTML="Done.<br>"+report.map(esc).join("<br>");
+  try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch{}
+  refreshDynFilters._s=""; render();
+}
+async function bulk(store,arr){ for(let i=0;i<arr.length;i+=2000){ const part=arr.slice(i,i+2000); await putMany(store,part); const m=MAPS[store](); part.forEach(x=>m.set(x.id,x)); await new Promise(r=>setTimeout(r,0)); } }
+async function derivePruned(){
+  const last=new Map(); for(const r of S.recs.values()){ if(r.status!=="Completed"||!r.treeId||!r.completed) continue; if(!/prune|elevation|train young|root prune|^a300|line clearance/i.test(r.task||"")&&r.category!=="Prune") continue;
+    if(r.completed>(last.get(r.treeId)||"")) last.set(r.treeId,r.completed); }
+  const ups=[]; for(const [tid,d] of last){ const t=S.trees.get(tid); if(t&&d>(t.pruned||"")) ups.push({...t,pruned:d}); }
+  if(ups.length) await bulk("trees",ups);
+}
+
+/* ================= export ================= */
+function csvCell(v){ v=v==null?"":String(v); return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v; }
+function toCSV(cols,rows){ return "﻿"+[cols.map(c=>c[0]).join(","),...rows.map(r=>cols.map(c=>csvCell(typeof c[1]==="function"?c[1](r):Array.isArray(r[c[1]])?r[c[1]].join("; "):r[c[1]])).join(","))].join("\r\n"); }
+const WR_COLS=[["WR ID","wrId"],["WR Status","status"],["Work Task","task"],["Work Category",r=>r.category||catOf(r.task)],["Priority","priority"],["Primary ID","treeTag"],["Address","address"],["Common Name","common"],["Crew","crew"],["Equipment","equipment"],["Hours","hours"],["Date Created","created"],["Due Date","due"],["Date Completed","completed"],["Description","description"],["WO",r=>{ const o=r.woId&&S.ords.get(r.woId); return o?o.woNum:""; }],["Service Request","srId"],["Edited in app",r=>r.local?"Yes":""]];
+const INSP_COLS=[["Date","date"],["Tree ID","treeTag"],["Inspector","inspector"],["Condition","condition"],["Risk","risk"],["DBH (in)","dbh"],["Defects","defects"],["Recommended action","action"],["Priority","priority"],["Notes","notes"],["Photos in app","photoCount"],["Service request","srId"]];
+const SR_COLS=[["Service Request ID","srId"],["Status","status"],["Primary Complaint","complaint"],["Priority","priority"],["Request Source","source"],["Address","address"],["Latitude","lat"],["Longitude","lng"],["Date Created","created"],["Due Date","due"],["Comments","comments"],["Notes","notes"],["Contact","contactName"],["Phone","phone"],["E-Mail","email"],["Edited in app",r=>r.local?"Yes":""]];
+
+/* ================= backup ================= */
+async function backup(){
+  const withPhotos=$("bkPhotos").checked; $("bkMsg").textContent="Preparing backup…";
+  const data={app:"reno-tree-field",version:2,exported:new Date().toISOString(),trees:[...S.trees.values()],records:[...S.recs.values()],orders:[...S.ords.values()],inspections:[...S.insp.values()],requests:[...S.reqs.values()],photos:withPhotos?await getAll("photos"):[]};
+  const name=`reno-trees-backup-${today()}.json`; const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+  await shareOrSave(name,blob,name);
+  ls.set("lastBackup",new Date().toISOString()); ls.set("changesSinceBackup","0");
+  $("bkMsg").textContent=`Backup ready: ${(blob.size/1048576).toFixed(1)} MB. Keep it somewhere off this device (email, Drive, OneDrive).`; render();
+}
+async function restore(file){
+  $("bkMsg").textContent="Reading backup…"; let data;
+  try{ data=JSON.parse(await file.text()); }catch{ $("bkMsg").textContent="That file isn't a backup from this app."; return; }
+  if(data.app!=="reno-tree-field"){ $("bkMsg").textContent="That file isn't a backup from this app."; return; }
+  for(const s of [...STORES,"photos"]) await clearStore(s);
+  for(const s of STORES) await putMany(s,data[s]||[]);
+  if(data.photos&&data.photos.length) for(let i=0;i<data.photos.length;i+=50) await putMany("photos",data.photos.slice(i,i+50));
+  await loadAll(); $("bkMsg").textContent=`Restored ${S.trees.size.toLocaleString()} trees, ${S.recs.size.toLocaleString()} work records and ${S.reqs.size} requests from ${fdate(data.exported)}.`;
+}
+
+/* ================= events ================= */
+fillSelect($("tCond"),COND); fillSelect($("tSite"),SITES); TSTAT.slice(1).forEach(s=>fillSelect($("tStatus"),[s]));
+fillSelect($("rStatus"),WRSTAT); fillSelect($("rCat"),CATS); fillSelect($("rPri"),PRI); fillSelect($("oStatus"),WOSTAT); fillSelect($("qStatus"),SRSTAT);
+const deb=(fn,ms)=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(fn,ms); }; };
+["tSearch","tCond","tSite","tStatus","tTrim","tArea","tInsp","tPrune"].forEach(i=>$(i).addEventListener("input",deb(renderTrees,120)));
+["rSearch","rStatus","rCat","rTask","rPri","rWO","rTrim"].forEach(i=>$(i).addEventListener("input",deb(renderRecords,120)));
+["oSearch","oStatus"].forEach(i=>$(i).addEventListener("input",renderOrders));
+["qSearch","qStatus","qType","qSource"].forEach(i=>$(i).addEventListener("input",renderRequests));
+["nShow","nCount"].forEach(i=>$(i).addEventListener("input",renderNearby));
+const sortable=(vid,key,fn)=>document.querySelectorAll(`#${vid} th[data-sort]`).forEach(th=>th.onclick=()=>{ const k=th.dataset.sort; S[key]={k,asc:S[key].k===k?!S[key].asc:true}; fn(); });
+sortable("view-trees","tSort",renderTrees); sortable("view-work","rSort",renderRecords); sortable("view-requests","qSort",renderRequests);
+document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>setWorkMode(b.dataset.mode));
+$("addTree").onclick=()=>openTree(null); $("addWR").onclick=()=>openRecord(null,{}); $("addWO").onclick=()=>openOrder(null); $("addSR").onclick=()=>openRequest(null);
+$("flagBtn").onclick=flagStart; $("plantBtn").onclick=()=>openPlant({});
+$("nColor").addEventListener("input",()=>{ refreshDots(); });
+$("mapBig").onclick=()=>{ const big=$("map").classList.toggle("big"); $("mapBig").textContent=big?"Smaller map":"Larger map"; if(map) setTimeout(()=>map.invalidateSize(),50); };
+$("selRoute").onclick=()=>{ if(S.sel.size<2){ toast("Select at least two work records"); return; } openRoute([...S.sel]); };
+$("sendChg").onclick=sendChanges; $("mergeBtn").onclick=()=>$("mergeFile").click();
+$("mergeFile").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) mergeFiles(fs).catch(()=>{ $("syncMsg").textContent="The merge stopped. The device may be out of storage."; }); };
+$("deviceName").addEventListener("change",e=>ls.set("deviceName",e.target.value.trim()));
+$("board").addEventListener("dragstart",e=>{ const c=e.target.closest("[data-card]"); if(c){ e.dataTransfer.setData("text/plain",c.dataset.card); e.dataTransfer.effectAllowed="move"; } });
+$("board").addEventListener("dragover",e=>{ const col=e.target.closest("[data-col]"); if(col){ e.preventDefault(); document.querySelectorAll(".col.over").forEach(x=>x!==col&&x.classList.remove("over")); col.classList.add("over"); } });
+$("board").addEventListener("dragleave",e=>{ const col=e.target.closest("[data-col]"); if(col&&!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+$("board").addEventListener("drop",e=>{ const col=e.target.closest("[data-col]"); if(!col) return; e.preventDefault(); col.classList.remove("over"); const id=e.dataTransfer.getData("text/plain"); if(id) setStatus(id,col.dataset.col); });
+$("board").addEventListener("change",e=>{ const s=e.target.closest("[data-bstat]"); if(s) setStatus(s.dataset.bstat,s.value); });
+$("locBtn").onclick=()=>{ if(S.me&&map){ followMe=true; map.setView([S.me.lat,S.me.lng],18); } startGPS(); };
+$("recRows").addEventListener("click",e=>{ const c=e.target.closest("[data-sel]"); if(c){ e.stopPropagation(); c.checked?S.sel.add(c.dataset.sel):S.sel.delete(c.dataset.sel); updateSelBar(); } },true);
+$("selAll").onclick=()=>{ (S._shown||[]).slice(0,300).forEach(id=>S.sel.add(id)); renderRecords(); };
+$("selNone").onclick=()=>{ S.sel.clear(); renderRecords(); };
+$("selToWO").onclick=()=>chooseOrderFor([...S.sel]);
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) importFiles(fs).catch(err=>{ console.error(err); $("impMsg").textContent="The import stopped. The device may be out of storage."; }); };
+$("backupBtn").onclick=backup; $("restoreBtn").onclick=()=>$("restoreFile").click();
+$("restoreFile").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) restore(f); };
+$("expTrees").onclick=()=>saveFile(`reno-trees-${today()}.csv`,toCSV(APP_COLS,[...S.trees.values()].sort(sorter("tag",true))),"text/csv");
+$("expWR").onclick=()=>saveFile(`reno-work-records-${today()}.csv`,toCSV(WR_COLS,[...S.recs.values()].sort(sorter("created",false))),"text/csv");
+$("expWRchg").onclick=()=>{ const rows=[...S.recs.values()].filter(r=>r.local).sort(sorter("updated",false)); if(!rows.length){ toast("No work records have been added or edited here yet"); return; } saveFile(`reno-work-records-changed-${today()}.csv`,toCSV(WR_COLS,rows),"text/csv"); };
+$("expInsp").onclick=()=>saveFile(`reno-inspections-${today()}.csv`,toCSV(INSP_COLS,[...S.insp.values()].sort(sorter("date",false))),"text/csv");
+$("expSR").onclick=()=>saveFile(`reno-service-requests-${today()}.csv`,toCSV(SR_COLS,[...S.reqs.values()].sort(sorter("created",false))),"text/csv");
+$("inspectorName").addEventListener("change",e=>ls.set("inspector",e.target.value.trim()));
+armDelete($("wipeBtn"),async()=>{ for(const s of [...STORES,"photos","meta"]) await clearStore(s); await loadAll(); toast("All data deleted from this device"); });
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-sel],[data-wck],[data-pk],[data-unlink],[data-srinsp],[data-srwr],[data-pick],[data-open],[data-bstat],[data-flag],[data-site]")) return;
+  const ph=e.target.closest("[data-photo]"); if(ph){ showPhoto(ph.dataset.photo); return; }
+  const ins=e.target.closest("[data-insp]"); if(ins){ const i=S.insp.get(ins.dataset.insp); if(i) openInspection(i.treeId,i.id); return; }
+  const wr=e.target.closest("[data-wr]"); if(wr){ const fromModal=!$("modal").hidden&&$("sheet").contains(wr); const cur=fromModal?captureBack():null; openRecord(wr.dataset.wr); if(cur) stack.push(cur); return; }
+  const wo=e.target.closest("[data-wo]"); if(wo){ openOrder(wo.dataset.wo); return; }
+  const sr=e.target.closest("[data-sr]"); if(sr){ openRequest(sr.dataset.sr); return; }
+  const tr=e.target.closest("[data-tree]"); if(tr){ openTree(tr.dataset.tree); }
+});
+function captureBack(){ return S.ctx||null; }
+document.addEventListener("keydown",e=>{ if(e.key!=="Enter") return; const r=e.target.closest&&e.target.closest("tr[data-tree],tr[data-wr],tr[data-sr]"); if(r&&!e.target.matches("input")) r.click(); });
+document.addEventListener("focusin",e=>{ if(e.target.id==="w-tree"&&!$("treeList").childElementCount){
+  const frag=[]; for(const t of S.trees.values()) if((t.status||"Active")!=="Removed") frag.push(`<option value="${esc(treeLabel(t))}"></option>`); $("treeList").innerHTML=frag.join(""); S._listN=S.trees.size; } });
+
+function route(){
+  let h=(location.hash||"").slice(1); if(h==="work-orders"){ h="work"; S.workMode="orders"; }
+  const v=["nearby","trees","work","requests","more"].includes(h)?h:(S.trees.size?"nearby":"more");
+  S.view=v; document.querySelectorAll(".view").forEach(el=>el.classList.toggle("hidden",el.id!=="view-"+v));
+  document.querySelectorAll("nav.tabs a").forEach(a=>{ if(a.dataset.view===v) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  if(v==="work") setWorkMode(S.workMode); else render();
+}
+window.addEventListener("hashchange",route);
+async function loadAll(){
+  const all=await Promise.all(STORES.map(getAll));
+  S.trees=new Map(all[0].map(x=>[x.id,x])); S.recs=new Map(all[1].map(x=>[x.id,x])); S.ords=new Map(all[2].map(x=>[x.id,x])); S.insp=new Map(all[3].map(x=>[x.id,x])); S.reqs=new Map(all[4].map(x=>[x.id,x]));
+  rebuildTagIndex(); refreshDynFilters._s=""; $("treeList").innerHTML=""; render();
+}
+(async()=>{
+  try{ DB=await openDB(); await loadAll(); }catch(e){ $("banner").innerHTML=`<div class="warn">This browser can't store data (private browsing may block it). Open the app in a normal browser window.</div>`; }
+  S.ready=true; route();
+  if("serviceWorker" in navigator&&location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+})();
+
+</script>
+</body>
+</html>
