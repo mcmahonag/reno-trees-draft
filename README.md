@@ -133,7 +133,7 @@ Only records changed since the last send are included, along with their photos. 
 
 ## Updating the app
 
-When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v6` → `reno-trees-v7`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
+When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v7` → `reno-trees-v8`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
 
 ## Notes
 

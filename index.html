@@ -842,7 +842,12 @@ async function renderData(){
 }
 
 /* ---- nearby + map ---- */
-let map=null, layer=null, meMarker=null, watchId=null, followMe=true, dots=null, routeLayer=null;
+let map=null, layer=null, meMarker=null, watchId=null, followMe=true, dots=null, routeLayer=null, progMove=false, progT=null;
+/* Move the map from code without it counting as the user taking over. zoom omitted = pan only, keep the user's zoom. */
+function mapGo(ll,zoom){ if(!map) return; progMove=true; clearTimeout(progT); progT=setTimeout(()=>{ progMove=false; },1200);
+  map.once("moveend",()=>{ clearTimeout(progT); progT=setTimeout(()=>{ progMove=false; },50); });
+  if(zoom!=null) map.setView(ll,zoom); else map.panTo(ll); }
+function setFollow(on){ followMe=on; const b=$("locBtn"); if(b&&S.me){ b.textContent=on?"Following you":"Re-center"; b.classList.toggle("primary",!on); } }
 const COND_OPTS=[...COND,"Not rated"];
 const condShow=new Set((()=>{ try{ const v=JSON.parse(ls.get("condShow")||"null"); return Array.isArray(v)&&v.length?v:COND_OPTS; }catch{ return COND_OPTS; } })());
 const condFiltered=()=>condShow.size<COND_OPTS.length;
@@ -871,7 +876,9 @@ function initMap(){
     return tile; } });
   dots=new DotLayer({updateWhenZooming:false,keepBuffer:1}).addTo(map);
   layer=L.layerGroup().addTo(map); routeLayer=L.layerGroup().addTo(map);
-  map.on("moveend",drawMarkers); map.on("dragstart",()=>{ followMe=false; });
+  map.on("moveend",drawMarkers);
+  map.on("dragstart",()=>{ if(!progMove) setFollow(false); });
+  map.on("zoomstart",()=>{ if(!progMove) setFollow(false); });
   map.on("click",e=>{ const z=map.getZoom(); if(z<14) return; const tol=(z<16?10:14); const p=map.latLngToContainerPoint(e.latlng); let best=null;
     const b=map.containerPointToLatLng([p.x-tol,p.y+tol]), b2=map.containerPointToLatLng([p.x+tol,p.y-tol]);
     for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); if(!passCond(t)) continue; const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
@@ -917,13 +924,13 @@ function renderNearby(){
 }
 function startGPS(){
   if(!("geolocation" in navigator)){ $("gpsMsg").textContent="This browser can't share location."; return; }
-  $("gpsMsg").textContent="Finding your location…"; followMe=true;
+  $("gpsMsg").textContent="Finding your location…"; setFollow(true);
   if(watchId!==null) navigator.geolocation.clearWatch(watchId);
   watchId=navigator.geolocation.watchPosition(p=>{
     const first=!S.me; S.me={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy}; S._fixAt=Date.now();
-    $("gpsMsg").textContent=`Location accurate to about ${Math.max(3,Math.round(S.me.acc*3.281))} ft. The list updates as you walk.`; $("locBtn").textContent="Re-center";
+    $("gpsMsg").textContent=`Location accurate to about ${Math.max(3,Math.round(S.me.acc*3.281))} ft. The list updates as you walk.`; setFollow(followMe);
     if(map){ if(!meMarker) meMarker=L.marker([S.me.lat,S.me.lng],{icon:L.divIcon({className:"",html:'<div class="me-dot"></div>',iconSize:[16,16]}),interactive:false,zIndexOffset:1000}).addTo(map); else meMarker.setLatLng([S.me.lat,S.me.lng]);
-      if(first||followMe) map.setView([S.me.lat,S.me.lng],Math.max(map.getZoom(),18)); }
+      if(first) mapGo([S.me.lat,S.me.lng],Math.max(map.getZoom(),18)); else if(followMe) mapGo([S.me.lat,S.me.lng]); }
     if(S.view==="nearby") renderNearby();
   }, e=>{ $("gpsMsg").textContent= e.code===1?"Location is blocked. Allow location for this site in your browser settings, then tap the button again.":"Couldn't get a location fix. Try again in the open."; },
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
@@ -1984,7 +1991,7 @@ $("condFilter").addEventListener("click",e=>{ const b=e.target.closest("[data-co
 $("condPoor").onclick=()=>setCond(["Poor","Dead"]); $("condAll").onclick=()=>setCond(COND_OPTS);
 $("shiftBtn").onclick=()=>{ if(SHIFT.on) shiftStop(false); else shiftStart(); };
 $("crewRefresh").onclick=()=>loadCrewLocs();
-document.addEventListener("click",e=>{ const g=e.target.closest("[data-crewgo]"); if(g&&map){ const r=crewLocs.get(g.dataset.crewgo); if(r){ followMe=false; map.setView([r.lat,r.lng],18); window.scrollTo({top:0,behavior:"smooth"}); } } });
+document.addEventListener("click",e=>{ const g=e.target.closest("[data-crewgo]"); if(g&&map){ const r=crewLocs.get(g.dataset.crewgo); if(r){ setFollow(false); mapGo([r.lat,r.lng],Math.max(map.getZoom(),17)); window.scrollTo({top:0,behavior:"smooth"}); } } });
 $("gForm").addEventListener("submit",e=>{ e.preventDefault(); sbSignIn($("gEmail").value,$("gPass").value,$("gMsg"),$("gLogin")); });
 ["sbUrlIn","sbKeyIn"].forEach(i=>$(i).addEventListener("change",()=>{ ls.set("sbUrl",$("sbUrlIn").value.trim()); ls.set("sbKey",$("sbKeyIn").value.trim()); SB.client=null; sbInit(); }));
 
@@ -1996,7 +2003,7 @@ $("board").addEventListener("dragover",e=>{ const col=e.target.closest("[data-co
 $("board").addEventListener("dragleave",e=>{ const col=e.target.closest("[data-col]"); if(col&&!col.contains(e.relatedTarget)) col.classList.remove("over"); });
 $("board").addEventListener("drop",e=>{ const col=e.target.closest("[data-col]"); if(!col) return; e.preventDefault(); col.classList.remove("over"); const id=e.dataTransfer.getData("text/plain"); if(id) setStatus(id,col.dataset.col); });
 $("board").addEventListener("change",e=>{ const s=e.target.closest("[data-bstat]"); if(s) setStatus(s.dataset.bstat,s.value); });
-$("locBtn").onclick=()=>{ if(S.me&&map){ followMe=true; map.setView([S.me.lat,S.me.lng],18); } startGPS(); };
+$("locBtn").onclick=()=>{ if(S.me&&map&&watchId!==null){ setFollow(true); mapGo([S.me.lat,S.me.lng],Math.max(map.getZoom(),16)); return; } startGPS(); };
 $("recRows").addEventListener("click",e=>{ const c=e.target.closest("[data-sel]"); if(c){ e.stopPropagation(); c.checked?S.sel.add(c.dataset.sel):S.sel.delete(c.dataset.sel); updateSelBar(); } },true);
 $("selAll").onclick=()=>{ (S._shown||[]).slice(0,300).forEach(id=>S.sel.add(id)); renderRecords(); };
 $("selNone").onclick=()=>{ S.sel.clear(); renderRecords(); };
