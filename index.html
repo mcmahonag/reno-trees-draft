@@ -237,6 +237,12 @@ td.ck input{width:22px;height:22px}
 .stopnum{background:#2c6a43;color:#fff;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;font:700 12px/1 var(--body);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
 #routeMap{height:44vh;min-height:260px;border-radius:var(--radius);border:1px solid var(--line)}
 @media (max-width:760px){ .board{grid-template-columns:repeat(4,82vw)} }
+
+#hdrSync{margin-left:auto}
+#hdrSync + nav.tabs{margin-left:8px}
+#hdrSync.busy svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:760px){ #hdrSync span{display:none} }
 </style>
 </head>
 <body>
@@ -246,6 +252,7 @@ td.ck input{width:22px;height:22px}
       <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="var(--accent-soft)"/><circle cx="15" cy="15" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="2" fill="var(--accent)"/></svg>
       <div><h1>Reno Tree Inventory</h1><small>Urban Forestry · field app</small></div>
     </div>
+    <button class="btn small hidden" id="hdrSync" title="Sync with Google Drive"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3"/><path d="M4 4v4h4M20 20v-4h-4"/></svg><span>Sync</span></button>
     <nav class="tabs" aria-label="Views">
       <a href="#nearby" data-view="nearby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>Nearby</a>
       <a href="#trees" data-view="trees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="6"/><path d="M12 15v7"/></svg>Trees</a>
@@ -367,6 +374,17 @@ td.ck input{width:22px;height:22px}
 
       <h2 style="font-size:24px;margin-top:8px">Data</h2>
       <div class="datagrid">
+        <div class="panel" id="gdPanel">
+          <h2>Google Drive</h2>
+          <p class="note m0">Keep the TreePlotter exports in one private Drive folder. Every device signs in once, then pulls the newest exports and shares field changes through the same folder.</p>
+          <details id="gdIdBox"><summary class="note" style="cursor:pointer">Google client ID</summary><label class="f" style="margin-top:8px">OAuth client ID<input type="text" id="gClientId" placeholder="xxxxxxxx.apps.googleusercontent.com"></label></details>
+          <label class="f">Drive folder link<input type="text" id="gFolder" placeholder="https://drive.google.com/drive/folders/…"></label>
+          <button class="btn primary" id="gdConnect">Connect Google Drive</button>
+          <button class="btn" id="gdUpdate">Update inventory from Drive</button>
+          <button class="btn" id="gdSync">Sync changes now</button>
+          <div class="progress hidden" id="gdProg"><span></span></div>
+          <div class="note" id="gdMsg"></div>
+        </div>
         <div class="panel">
           <h2>Import from TreePlotter</h2>
           <p class="note m0">Select one or more CSV exports: trees, work records, work orders, inspections and service requests. The app recognizes each file. Re-importing updates records by their TreePlotter ID and keeps anything you've changed in this app.</p>
@@ -385,8 +403,8 @@ td.ck input{width:22px;height:22px}
           <div class="note" id="bkMsg"></div>
         </div>
         <div class="panel">
-          <h2>Phone ↔ desktop</h2>
-          <p class="note m0">Each device keeps its own copy. To keep a phone and a desktop in step, send a changes file from one and merge it on the other. Where the same record was edited on both, the newer edit wins.</p>
+          <h2>Phone ↔ desktop without Drive</h2>
+          <p class="note m0">If you're not using Google Drive: send a changes file from one device and merge it on the other. Where the same record was edited on both, the newer edit wins.</p>
           <label class="f">This device's name<input type="text" id="deviceName" placeholder="e.g. CG phone"></label>
           <button class="btn primary" id="sendChg">Send my changes</button>
           <button class="btn" id="mergeBtn">Merge changes or a backup</button>
@@ -422,6 +440,8 @@ td.ck input{width:22px;height:22px}
 <script>
 (() => {
 "use strict";
+/* ===== SETUP: paste the Google OAuth client ID here (Web application type). See README. ===== */
+const CONFIG = { googleClientId: "" };
 /* ================= vocabularies (from Reno's TreePlotter) ================= */
 const COND = ["Excellent","Good","Fair","Poor","Dead","Volunteer","Champion"];
 const COND_C = {Excellent:"good",Good:"good",Fair:"info",Poor:"warn",Dead:"crit",Volunteer:"dead",Champion:"acc"};
@@ -575,10 +595,11 @@ function doRender(){
 }
 function renderBanner(){
   let h="";
-  if(S.ready&&!S.trees.size) h+=`<div><span><strong>No inventory on this device yet.</strong> Import the TreePlotter CSV exports to load Reno's trees and work.</span><a class="btn small primary" href="#more" id="goImport">Go to import</a></div>`;
+  if(S.ready&&!S.trees.size) h+=`<div><span><strong>No inventory on this device yet.</strong> ${gdReady()?"Tap “Update inventory from Drive” on the More tab.":"Connect the Google Drive folder, or import the TreePlotter CSV exports, on the More tab."}</span><a class="btn small primary" href="#more" id="goImport">Set up</a></div>`;
   const lastBk=ls.get("lastBackup"), changed=+ls.get("changesSinceBackup")||0;
-  if(S.ready&&S.trees.size&&changed>=10) h+=`<div class="warn"><span>${changed} changes since your last backup${lastBk?` (${fdate(lastBk)})`:""}. Data on this device isn't copied anywhere else.</span><a class="btn small" href="#more">Back up</a></div>`;
-  $("banner").innerHTML=h;
+  if(S.ready&&S.trees.size&&changed>=10&&gdReady()&&ls.get("gConnected")) h+=`<div class="warn"><span>${changed} changes on this device haven't been synced to Drive yet.</span><button class="btn small primary" id="bannerSync">Sync now</button></div>`;
+  else if(S.ready&&S.trees.size&&changed>=10) h+=`<div class="warn"><span>${changed} changes since your last backup${lastBk?` (${fdate(lastBk)})`:""}. Data on this device isn't copied anywhere else.</span><a class="btn small" href="#more">Back up</a></div>`;
+  $("banner").innerHTML=h; const bs=$("bannerSync"); if(bs) bs.onclick=gdSync;
 }
 function refreshDynFilters(){
   const sig=`${S.trees.size}|${S.recs.size}|${S.ords.size}|${S.reqs.size}`; if(refreshDynFilters._s===sig) return; refreshDynFilters._s=sig;
@@ -746,6 +767,10 @@ function bars(id,rows,empty){ const max=Math.max(1,...rows.map(r=>r[1]));
 async function renderData(){
   if(document.activeElement!==$("inspectorName")) $("inspectorName").value=me();
   if(document.activeElement!==$("deviceName")) $("deviceName").value=ls.get("deviceName")||"";
+  if(document.activeElement!==$("gClientId")) $("gClientId").value=ls.get("gClientId")||CONFIG.googleClientId||"";
+  if(document.activeElement!==$("gFolder")) $("gFolder").value=ls.get("gFolder")||"";
+  if(CONFIG.googleClientId) $("gdIdBox").classList.add("hidden");
+  if(!$("gdMsg").textContent){ const t=ls.get("gLastSync:"+gdFolder()); if(gdReady()&&ls.get("gConnected")) $("gdMsg").textContent=t?`Last synced ${new Date(t).toLocaleString()}.`:"Connected. Not synced yet on this device."; }
   let m=`${S.trees.size.toLocaleString()} trees, ${S.recs.size.toLocaleString()} work records, ${S.ords.size} work orders, ${S.reqs.size} service requests and ${S.insp.size} inspections on this device.`;
   try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); m+=` Using ${(e.usage/1048576).toFixed(1)} MB.`; }
     if(navigator.storage&&navigator.storage.persisted){ const p=await navigator.storage.persisted(); m+= p?" Storage is protected from automatic clearing.":" The browser may clear this data if the device runs low on space, so keep backups."; } }catch{}
@@ -1355,31 +1380,152 @@ function openRoute(recIds,woId){
 }
 
 /* ================= phone ↔ desktop merge ================= */
-async function sendChanges(){
-  const since=ls.get("lastSyncSent")||""; const dev=(ls.get("deviceName")||"device").replace(/[^\w-]+/g,"-");
+function deviceId(){ let d=ls.get("deviceId"); if(!d){ d=Math.random().toString(36).slice(2,10); ls.set("deviceId",d); } return d; }
+async function buildChanges(since){
   const pick=m=>[...m.values()].filter(x=>x.local&&(!since||(x.updated||"")>since));
   const photos=(await getAll("photos")).filter(p=>!since||(p.updated||"")>since);
-  const data={app:"reno-tree-field",kind:"changes",version:2,device:ls.get("deviceName")||"",since,exported:new Date().toISOString(),
-    trees:pick(S.trees),records:pick(S.recs),orders:pick(S.ords),inspections:pick(S.insp),requests:pick(S.reqs),photos,deleted:JSON.parse(ls.get("deleted")||"[]")};
+  return {app:"reno-tree-field",kind:"changes",version:2,device:ls.get("deviceName")||"",deviceId:deviceId(),since,exported:new Date().toISOString(),
+    trees:pick(S.trees),records:pick(S.recs),orders:pick(S.ords),inspections:pick(S.insp),requests:pick(S.reqs),photos,deleted:JSON.parse(ls.get("deleted")||"[]").filter(d=>!since||d[2]>since)};
+}
+async function sendChanges(){
+  const since=ls.get("lastSyncSent")||""; const dev=(ls.get("deviceName")||"device").replace(/[^\w-]+/g,"-");
+  const data=await buildChanges(since); const photos=data.photos;
   const n=STORES.reduce((a,k)=>a+data[k].length,0);
   if(!n&&!photos.length){ $("syncMsg").textContent=since?`Nothing has changed here since ${fdate(since)}.`:"Nothing has been added or edited on this device yet."; return; }
   const blob=new Blob([JSON.stringify(data)],{type:"application/json"}); await shareOrSave(`reno-trees-changes-${dev}-${today()}.json`,blob,"Tree app changes");
   ls.set("lastSyncSent",data.exported);
   $("syncMsg").textContent=`Sent ${n} changed record${n===1?"":"s"} and ${photos.length} photo${photos.length===1?"":"s"}. Open the file on the other device and use “Merge changes or a backup”.`;
 }
+async function mergeData(data,tally){
+  for(const s of STORES){ const m=MAPS[s](); const up=[];
+    for(const x of data[s]||[]){ const ex=m.get(x.id); if(!ex||(x.updated||"")>(ex.updated||"")){ up.push(x); tally.newer++; } else tally.older++; }
+    if(up.length) await bulk(s,up); }
+  for(const [s,id] of data.deleted||[]){ if(STORES.includes(s)&&MAPS[s]().has(id)){ await del(s,id); MAPS[s]().delete(id); } }
+  if(data.photos&&data.photos.length){ const have=new Set((await getAll("photos")).map(p=>p.id)); const add=data.photos.filter(p=>!have.has(p.id)); tally.ph+=add.length; for(let i=0;i<add.length;i+=50) await putMany("photos",add.slice(i,i+50)); }
+}
+function afterMerge(){ rebuildTagIndex(); gridN=-1; S._ver=(S._ver||0)+1; refreshDynFilters._s=""; render(); }
 async function mergeFiles(files){
-  let tot=0, newer=0, older=0, ph=0;
+  const tally={newer:0,older:0,ph:0};
   for(const f of files){ let data; try{ data=JSON.parse(await f.text()); }catch{ $("syncMsg").textContent=`${f.name} isn't a file from this app.`; return; }
     if(data.app!=="reno-tree-field"){ $("syncMsg").textContent=`${f.name} isn't a file from this app.`; return; }
-    for(const s of STORES){ const m=MAPS[s](); const up=[];
-      for(const x of data[s]||[]){ tot++; const ex=m.get(x.id); if(!ex||(x.updated||"")>(ex.updated||"")){ up.push(x); newer++; } else older++; }
-      if(up.length) await bulk(s,up); }
-    for(const [s,id] of data.deleted||[]){ if(STORES.includes(s)&&MAPS[s]().has(id)){ await del(s,id); MAPS[s]().delete(id); } }
-    if(data.photos&&data.photos.length){ const have=new Set((await getAll("photos")).map(p=>p.id)); const add=data.photos.filter(p=>!have.has(p.id)); ph+=add.length; for(let i=0;i<add.length;i+=50) await putMany("photos",add.slice(i,i+50)); }
-  }
-  rebuildTagIndex(); gridN=-1; S._ver=(S._ver||0)+1; refreshDynFilters._s=""; render();
-  $("syncMsg").textContent=`Merged ${newer.toLocaleString()} new or newer records${ph?` and ${ph} photos`:""}. ${older?`${older.toLocaleString()} were already up to date here.`:""}`;
+    await mergeData(data,tally); }
+  afterMerge();
+  $("syncMsg").textContent=`Merged ${tally.newer.toLocaleString()} new or newer records${tally.ph?` and ${tally.ph} photos`:""}. ${tally.older?`${tally.older.toLocaleString()} were already up to date here.`:""}`;
 }
+
+/* ================= Google Drive ================= */
+const GD={token:null,exp:0};
+const gdClientId=()=>(ls.get("gClientId")||CONFIG.googleClientId||"").trim();
+function parseFolder(v){ v=String(v||"").trim(); const m=/folders\/([\w-]+)/.exec(v)||/[?&]id=([\w-]+)/.exec(v); return m?m[1]:v.replace(/[^\w-]/g,""); }
+const gdFolder=()=>parseFolder(ls.get("gFolder")||"");
+const gdReady=()=>!!(gdClientId()&&gdFolder());
+function gdMsg(t,html){ const el=$("gdMsg"); if(!el) return; if(html) el.innerHTML=t; else el.textContent=t; }
+function gdProg(frac){ const p=$("gdProg"); if(frac==null){ p.classList.add("hidden"); return; } p.classList.remove("hidden"); p.firstElementChild.style.width=Math.round(frac*100)+"%"; }
+function loadGIS(){ return new Promise((res,rej)=>{ if(window.google&&google.accounts&&google.accounts.oauth2) return res();
+  const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error("Couldn't reach Google. Check the connection.")); document.head.appendChild(s); }); }
+async function gdToken(){
+  if(GD.token&&Date.now()<GD.exp-60000) return GD.token;
+  if(!gdClientId()) throw new Error("Add the Google client ID first (see README).");
+  await loadGIS();
+  return new Promise((res,rej)=>{ const c=google.accounts.oauth2.initTokenClient({client_id:gdClientId(),scope:"https://www.googleapis.com/auth/drive",
+    callback:r=>{ if(r.error){ rej(new Error(r.error_description||r.error)); return; } GD.token=r.access_token; GD.exp=Date.now()+(Number(r.expires_in)||3600)*1000; ls.set("gConnected","1"); updateSyncBtn(); res(GD.token); },
+    error_callback:e=>rej(new Error(e&&e.type==="popup_closed"?"Sign-in was closed before finishing.":e&&e.type==="popup_failed_to_open"?"The sign-in window was blocked. Allow pop-ups for this site and try again.":"Google sign-in didn't complete.")) });
+    c.requestAccessToken({prompt:ls.get("gConnected")?"":"consent"}); });
+}
+async function gd(path,opt){ opt=opt||{}; let tok=await gdToken();
+  const go=t=>fetch(path.startsWith("http")?path:"https://www.googleapis.com/drive/v3/"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+t}});
+  let r=await go(tok); if(r.status===401){ GD.token=null; tok=await gdToken(); r=await go(tok); }
+  if(!r.ok){ let m=""; try{ m=(await r.json()).error.message; }catch{} throw new Error(r.status===404?"Drive folder not found. Check the link, and that this Google account has access to it.":r.status===403?`Drive refused access${m?": "+m:""}.`:`Drive error ${r.status}${m?": "+m:""}`); }
+  return r; }
+async function gdList(folder,extraQ){ const q=encodeURIComponent(`'${folder}' in parents and trashed=false${extraQ?" and "+extraQ:""}`); let files=[], page="";
+  do{ const r=await (await gd(`files?q=${q}&fields=nextPageToken,files(id,name,mimeType,modifiedTime,size)&orderBy=modifiedTime%20desc&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true${page?"&pageToken="+encodeURIComponent(page):""}`)).json();
+    files=files.concat(r.files||[]); page=r.nextPageToken||""; }while(page); return files; }
+const SHEET="application/vnd.google-apps.spreadsheet";
+async function gdText(f){ return (await gd(f.mimeType===SHEET?`files/${f.id}/export?mimeType=text%2Fcsv`:`files/${f.id}?alt=media&supportsAllDrives=true`)).text(); }
+async function gdCreate(name,mime,parent,content){
+  const meta={name,mimeType:mime,parents:[parent]}; const b="rtb"+Date.now();
+  const body=new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${mime}\r\n\r\n`,content,`\r\n--${b}--`]);
+  return (await gd("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime",{method:"POST",headers:{"Content-Type":`multipart/related; boundary=${b}`},body})).json(); }
+async function gdOverwrite(id,mime,content){ return (await gd(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,{method:"PATCH",headers:{"Content-Type":mime},body:content})).json(); }
+async function gdSyncFolder(){ const folder=gdFolder(), key="gSync:"+folder; let id=ls.get(key); if(id) return id;
+  const ex=await gdList(folder,"name='app-sync' and mimeType='application/vnd.google-apps.folder'");
+  if(ex[0]) id=ex[0].id; else id=(await (await gd("files?supportsAllDrives=true&fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"app-sync",mimeType:"application/vnd.google-apps.folder",parents:[folder]})})).json()).id;
+  ls.set(key,id); return id; }
+function updateSyncBtn(){ const b=$("hdrSync"); if(!b) return; const on=gdReady()&&ls.get("gConnected"); b.classList.toggle("hidden",!on);
+  const t=ls.get("gLastSync:"+gdFolder()); b.title=t?`Last synced ${new Date(t).toLocaleString()}`:"Sync with Google Drive"; }
+async function gdConnect(){ saveGdFields(); if(!gdReady()){ gdMsg(!gdClientId()?"Add the Google client ID first (see the README).":"Paste the Drive folder link."); return; }
+  try{ gdMsg("Opening Google sign-in…"); await gdToken(); const files=await gdList(gdFolder());
+    const csv=files.filter(f=>/\.csv$/i.test(f.name)||f.mimeType==="text/csv"||f.mimeType===SHEET);
+    gdMsg(`Connected. The folder has ${csv.length} spreadsheet file${csv.length===1?"":"s"}. ${S.trees.size?"Tap “Sync changes now” to share work with other devices.":"Tap “Update inventory from Drive” to load them."}`);
+  }catch(e){ gdMsg(e.message); } }
+let gdBusy=false;
+async function gdUpdate(){
+  if(gdBusy) return; saveGdFields(); if(!gdReady()){ gdMsg("Add the client ID and folder link first."); return; } gdBusy=true;
+  try{ gdMsg("Checking the Drive folder…"); gdProg(0.02);
+    const files=(await gdList(gdFolder())).filter(f=>/\.csv$/i.test(f.name)||f.mimeType==="text/csv"||f.mimeType===SHEET);
+    const seen=JSON.parse(ls.get("gSeen")||"{}"), kinds=JSON.parse(ls.get("gKinds")||"{}"); const chosen={}, todo=[]; let i=0;
+    for(const f of files){ i++; gdProg(i/files.length*0.5);
+      const k0=kinds[f.id]; if(k0&&chosen[k0]) continue;
+      if(k0&&seen[f.id]===f.modifiedTime){ chosen[k0]="current"; continue; }
+      gdMsg(`Downloading ${f.name}…`); const text=await gdText(f);
+      const head=parseCSV(text.slice(0,Math.max(0,text.search(/\r?\n/))||text.length).replace(/\\"/g,"'"))[0]||[]; const k=kindOf(head.map(h=>h.replace(/^\uFEFF/,"").trim()));
+      kinds[f.id]=k; if(!k||chosen[k]) continue;
+      chosen[k]={f,text}; todo.push(chosen[k]); }
+    ls.set("gKinds",JSON.stringify(kinds));
+    if(!todo.length){ gdProg(null); const n=Object.keys(chosen).length; gdMsg(n?"Already up to date. No newer exports in the folder.":"No TreePlotter exports found in this folder. Put the CSV exports there and try again."); gdBusy=false; return; }
+    gdMsg(`Importing ${todo.map(t=>t.f.name).join(", ")}…`); gdProg(0.6);
+    await importFiles(todo.map(t=>new File([t.text],t.f.name,{type:"text/csv"})));
+    todo.forEach(t=>seen[t.f.id]=t.f.modifiedTime); ls.set("gSeen",JSON.stringify(seen));
+    gdProg(null); gdMsg(`Updated from Drive: ${todo.map(t=>`${esc(t.f.name)} (${fdate(t.f.modifiedTime)})`).join(", ")}. Details are under Import from TreePlotter.`,true);
+  }catch(e){ gdProg(null); gdMsg(e.message); console.error(e); }
+  gdBusy=false;
+}
+const priRankOf=r=>{ const i=PRI.indexOf(r.priority); return i<0?9:i; };
+const STATUS_COLS=[["WR ID","wrId"],["Status","status"],["Task","task"],["Priority","priority"],["Tree ID","treeTag"],["Address","address"],["Species","common"],["Crew","crew"],["Equipment","equipment"],["Work order",r=>{ const o=r.woId&&S.ords.get(r.woId); return o?`${o.woNum} ${o.name||""}`.trim():""; }],["Created","created"],["Due","due"],["Completed","completed"],["Hours","hours"],["Description","description"],["Service request","srId"],["Changed in app",r=>r.local?(r.updated||"").slice(0,16).replace("T"," "):""],["Latitude","lat"],["Longitude","lng"]];
+async function gdWriteStatus(){
+  const d90=addDays(today(),-90);
+  const rows=[...S.recs.values()].filter(r=>isOpenWR(r)||(r.completed||"")>=d90||r.local).sort((a,b)=>(isOpenWR(b)-isOpenWR(a))||(priRankOf(a)-priRankOf(b))||String(b.updated||b.created||"").localeCompare(String(a.updated||a.created||"")));
+  const csv=toCSV(STATUS_COLS,rows); const name="Work status (from app).csv"; const key="gStatus:"+gdFolder(); let id=ls.get(key);
+  try{ if(id){ await gdOverwrite(id,"text/csv",csv); return rows.length; } }catch{ id=null; }
+  const ex=await gdList(gdFolder(),`name='${name.replace(/'/g,"\\'")}'`);
+  if(ex[0]){ await gdOverwrite(ex[0].id,"text/csv",csv); ls.set(key,ex[0].id); } else { const r=await gdCreate(name,"text/csv",gdFolder(),csv); ls.set(key,r.id); }
+  return rows.length; }
+async function gdSync(){
+  if(gdBusy) return; saveGdFields(); if(!gdReady()){ toast("Set up Google Drive on the More tab first"); location.hash="#more"; return; } gdBusy=true;
+  const btn=$("hdrSync"); btn.classList.add("busy");
+  try{
+    gdMsg("Syncing with Drive…"); gdProg(0.05);
+    const sid=await gdSyncFolder(); const me_=deviceId(); const folder=gdFolder();
+    // 1. upload this device's changes (photos split so each file stays small)
+    const since=ls.get("gSent:"+folder)||""; const data=await buildChanges(since); const stamp=Date.now();
+    const photos=data.photos; data.photos=[];
+    const n=STORES.reduce((a,k)=>a+data[k].length,0)+data.deleted.length; let sentPh=0;
+    if(n) await gdCreate(`changes_${me_}_${stamp}.json`,"application/json",sid,JSON.stringify(data));
+    gdProg(0.25);
+    let chunk=[], size=0, part=0;
+    const flush=async()=>{ if(!chunk.length) return; await gdCreate(`photos_${me_}_${stamp}_${part++}.json`,"application/json",sid,JSON.stringify({app:"reno-tree-field",kind:"photos",deviceId:me_,photos:chunk})); sentPh+=chunk.length; chunk=[]; size=0; };
+    for(const p of photos){ const sz=(p.data||"").length; if(size+sz>3500000) await flush(); chunk.push(p); size+=sz; } await flush();
+    ls.set("gSent:"+folder,data.exported);
+    gdProg(0.45);
+    // 2. pull other devices' changes
+    const lastPull=ls.get("gPulled:"+folder)||""; const list=(await gdList(sid)).filter(f=>/\.json$/i.test(f.name)&&!f.name.includes(`_${me_}_`)&&(!lastPull||f.modifiedTime>lastPull));
+    list.sort((a,b)=>a.modifiedTime.localeCompare(b.modifiedTime));
+    const tally={newer:0,older:0,ph:0}; let maxT=lastPull, k=0;
+    for(const f of list){ k++; gdProg(0.45+0.4*k/list.length); gdMsg(`Merging ${k} of ${list.length} from other devices…`);
+      try{ const d=JSON.parse(await gdText(f)); if(d.app==="reno-tree-field") await mergeData(d,tally); }catch(e){ console.warn("skip",f.name,e); }
+      if(f.modifiedTime>maxT) maxT=f.modifiedTime; }
+    if(maxT) ls.set("gPulled:"+folder,maxT);
+    afterMerge();
+    // 3. refresh the office status sheet
+    gdProg(0.9); const rows=await gdWriteStatus();
+    const now=new Date().toISOString(); ls.set("gLastSync:"+folder,now); ls.set("changesSinceBackup","0"); updateSyncBtn();
+    gdProg(null);
+    const msg=`Synced. Sent ${n} change${n===1?"":"s"}${sentPh?` and ${sentPh} photo${sentPh===1?"":"s"}`:""}; received ${tally.newer} from other devices${tally.ph?` plus ${tally.ph} photos`:""}. “Work status (from app)” in the folder now lists ${rows.toLocaleString()} work records.`;
+    gdMsg(msg); toast("Synced with Drive");
+  }catch(e){ gdProg(null); gdMsg(e.message); toast(e.message); console.error(e); }
+  btn.classList.remove("busy"); gdBusy=false;
+}
+function saveGdFields(){ const c=$("gClientId"), f=$("gFolder"); if(c&&c.value.trim()!==(ls.get("gClientId")||"")) ls.set("gClientId",c.value.trim()); if(f&&f.value.trim()&&f.value.trim()!==ls.get("gFolder")) ls.set("gFolder",f.value.trim()); updateSyncBtn(); }
 
 /* ================= PDFs ================= */
 function imgSize(src){ return new Promise(r=>{ const i=new Image(); i.onload=()=>r([i.naturalWidth,i.naturalHeight]); i.onerror=()=>r(null); i.src=src; }); }
@@ -1635,6 +1781,8 @@ $("flagBtn").onclick=flagStart; $("plantBtn").onclick=()=>openPlant({});
 $("nColor").addEventListener("input",()=>{ refreshDots(); });
 $("mapBig").onclick=()=>{ const big=$("map").classList.toggle("big"); $("mapBig").textContent=big?"Smaller map":"Larger map"; if(map) setTimeout(()=>map.invalidateSize(),50); };
 $("selRoute").onclick=()=>{ if(S.sel.size<2){ toast("Select at least two work records"); return; } openRoute([...S.sel]); };
+$("gdConnect").onclick=gdConnect; $("gdUpdate").onclick=gdUpdate; $("gdSync").onclick=gdSync; $("hdrSync").onclick=gdSync;
+["gClientId","gFolder"].forEach(i=>$(i).addEventListener("change",saveGdFields));
 $("sendChg").onclick=sendChanges; $("mergeBtn").onclick=()=>$("mergeFile").click();
 $("mergeFile").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) mergeFiles(fs).catch(()=>{ $("syncMsg").textContent="The merge stopped. The device may be out of storage."; }); };
 $("deviceName").addEventListener("change",e=>ls.set("deviceName",e.target.value.trim()));
@@ -1688,7 +1836,7 @@ async function loadAll(){
 }
 (async()=>{
   try{ DB=await openDB(); await loadAll(); }catch(e){ $("banner").innerHTML=`<div class="warn">This browser can't store data (private browsing may block it). Open the app in a normal browser window.</div>`; }
-  S.ready=true; route();
+  S.ready=true; route(); updateSyncBtn();
   if("serviceWorker" in navigator&&location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
 })();

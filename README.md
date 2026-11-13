@@ -28,7 +28,40 @@ It works without signal. Everything is stored **on the device**. There are no ac
 
 Open it once with signal so the map and PDF tools are saved for offline use.
 
-## 3. Load the data from TreePlotter
+## 3. Connect Google Drive (recommended)
+
+Drive lets every device load the TreePlotter exports from one folder and share field changes without emailing files.
+
+**One-time Google Cloud setup (about 15 minutes):**
+1. Go to https://console.cloud.google.com/ and create a project, for example "Reno Trees".
+2. Open **APIs & Services → Library**, search for **Google Drive API** and click **Enable**.
+3. Open **APIs & Services → OAuth consent screen** (also called **Google Auth Platform**):
+   - User type: **External**, unless everyone is on the same Google Workspace, in which case use **Internal**.
+   - Fill in the app name and your email.
+   - Leave the publishing status at **Testing**, and under **Test users / Audience** add every Google account that will use the app.
+4. Open **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type: **Web application**.
+   - **Authorized JavaScript origins:** add `https://YOUR-USERNAME.github.io`. Use the origin only, with no repo path.
+   - Click **Create** and copy the **Client ID**. It ends in `.apps.googleusercontent.com`.
+5. Put the client ID in the app, choosing one of:
+   - **For everyone:** edit `index.html`. Near the top of the script, set `const CONFIG = { googleClientId: "PASTE-HERE" };`, then commit. The client ID isn't a secret, so it's fine in a public repo.
+   - **For testing:** paste it on one device under **More → Google Drive → Google client ID**.
+
+**The Drive folder:**
+1. Create a folder in Google Drive, for example "Reno Trees – app data". Share it only with the people who use the app.
+2. Upload the TreePlotter CSV exports: trees, work records, work orders, tree inspections and service requests.
+3. Copy the folder's link.
+
+**On each device:** go to **More → Google Drive**, paste the folder link, tap **Connect Google Drive** and sign in. Then tap **Update inventory from Drive**.
+
+**Day to day:**
+- **Sync** (top of the screen, or **More → Sync changes now**) uploads this device's changes and photos to an `app-sync` subfolder and pulls in everyone else's. Where the same record was edited on two devices, the newer edit wins.
+- Each sync also rewrites **"Work status (from app).csv"** in the folder. It lists open work records, work completed in the last 90 days and anything changed in the app, so the office can open it in Google Sheets.
+- When you drop newer TreePlotter exports into the folder, tap **Update inventory from Drive**. Only files that changed are downloaded.
+- Sign-in lasts about an hour. After that, the next sync asks you to tap through Google sign-in again.
+- If the app says the sign-in window was blocked, allow pop-ups for the site.
+
+## 4. Or load the data by hand (no Drive)
 
 Export these layers from TreePlotter as CSV: **trees**, **work records**, **work orders**, **tree inspections** and **service requests**.
 
@@ -68,9 +101,9 @@ Completing a record updates the tree. Pruning sets the last-pruned date, a remov
 
 ---
 
-## Keeping a phone and a desktop in step
+## Keeping a phone and a desktop in step without Drive
 
-Each device keeps its own copy. There is no live sync without a server. To move changes between devices:
+With Google Drive connected, use **Sync** (see section 3). Without it, move changes by file:
 
 1. On the device with new work (usually the phone): **More** → **Send my changes**. Share the file by email, AirDrop, Drive or OneDrive.
 2. On the other device: **More** → **Merge changes or a backup**, then pick the file.
