@@ -62,6 +62,17 @@ Crew accounts see the tree inventory, the map and Nearby. They also see **only t
 
 Assigning work to a crew: put their code in a work record's **Crew** field (for example `LP, PC` reaches both LP and PC), or in a work order's **Assigned to** field. Assigning a work order also fills the Crew field on its records.
 
+### Crew locations
+
+Crew members tap **Start shift** at the top of the app. While the app is open on their phone, it shares their position with admins. It sends roughly once a minute, or sooner when they've moved more than about 100 ft. A green banner tells them sharing is on, with an **End shift** button. Shifts also end on their own after 12 hours or at sign-out.
+
+Admins see each crew as a labeled pin (their crew code, e.g. **LP**) on the **Nearby** map, plus a **Crews on shift** list showing who's out, when they were last seen, distance from you and how many open work records they have. Tap a name to jump the map to them.
+
+- Only each person's **latest** position is stored, never a trail. Only admins can see it.
+- A web app can only send location **while it's open on screen**. If the phone is locked or another app is in front, the pin stops updating and turns **grey** after 15 minutes ("last seen 25 min ago"). It updates again as soon as the app is reopened.
+
+**One-time setup:** run [`supabase/crew-locations.sql`](supabase/crew-locations.sql) in the Supabase SQL Editor, after `crew-mode.sql`.
+
 **If something looks out of step:** More → Team database → **Re-download everything**.
 
 ## 4. Or work without the team database
@@ -79,6 +90,7 @@ To refresh later, import newer exports the same way. Records are matched by thei
 **Nearby tab**
 - **Use my location** lists the closest trees with distance and direction and updates as you walk. You can switch the list to open service requests.
 - The **map shows every tree**, colored by condition, open work or how long since the last inspection. Tap a tree to open it.
+- **Show trees** buttons above the map switch each condition on or off (Excellent, Good, Fair, Poor, Dead, Volunteer, Champion, Not rated). **Poor + Dead only** is one tap. The filter applies to both the map and the nearby list, and the app remembers it.
 - **Flag a tree:** stand at the tree and tap it. Pick it from the closest trees, or add it if it isn't listed. Then choose what's wrong, set the priority, add a note and photos, and save. That creates a work record and can add it to a work order at the same time.
 - **Plant a tree:** records a new tree at your GPS location, or converts a nearby planting site or stump. It fills in the scientific name from the inventory, logs a completed Plant Tree record and can add a watering record.
 
@@ -121,7 +133,7 @@ Only records changed since the last send are included, along with their photos. 
 
 ## Updating the app
 
-When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v5` → `reno-trees-v6`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
+When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v6` → `reno-trees-v7`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
 
 ## Notes
 

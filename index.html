@@ -238,7 +238,6 @@ td.ck input{width:22px;height:22px}
 #routeMap{height:44vh;min-height:260px;border-radius:var(--radius);border:1px solid var(--line)}
 @media (max-width:760px){ .board{grid-template-columns:repeat(4,82vw)} }
 
-#hdrSync{margin-left:auto}
 #hdrSync + nav.tabs{margin-left:8px}
 #hdrSync.busy svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -259,6 +258,30 @@ body:not(.crew) .crew-only{display:none !important}
 @media (max-width:760px){ .trow{grid-template-columns:1fr 1fr} .trow .em{grid-column:1/-1} }
 #teamPanel{grid-column:1/-1}
 #teamList{min-width:0}
+
+#shiftBtn{gap:6px}
+.top-inner .brand{margin-right:auto}
+#shiftBtn .dotlive{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+#shiftBtn[aria-pressed="true"]{border-color:var(--good);color:var(--good);font-weight:700}
+#shiftBtn[aria-pressed="true"] .dotlive{background:var(--good);box-shadow:0 0 0 0 rgba(47,158,87,.6);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,158,87,.55)}70%{box-shadow:0 0 0 8px rgba(47,158,87,0)}100%{box-shadow:0 0 0 0 rgba(47,158,87,0)}}
+.crew-pin{display:grid;place-items:center;min-width:34px;height:26px;padding:0 6px;border-radius:13px;background:#1f5fbf;color:#fff;font:700 12px/1 var(--body);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);white-space:nowrap}
+.crew-pin.stale{background:#7d817f}
+.crew-pin::after{content:"";position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1f5fbf}
+.crew-pin.stale::after{border-top-color:#7d817f}
+.crew-pin{position:relative}
+@media (max-width:760px){ #shiftLbl{font-size:12px} }
+@media (prefers-reduced-motion: reduce){ #shiftBtn .dotlive{animation:none !important} }
+
+.banner > div.sharebar{border-color:color-mix(in srgb,var(--good) 45%,var(--line));background:color-mix(in srgb,var(--good) 10%,var(--surface));justify-content:space-between;padding:8px 12px}
+.sharebar .dotlive{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--good);margin-right:6px;animation:pulse 2s infinite}
+@media (max-width:760px){ .brand small{display:none} .brand h1{font-size:17px} .brand svg{width:26px;height:26px} .top-inner{gap:8px} #hdrSync,#shiftBtn{min-height:34px;padding:4px 8px} }
+@media (prefers-reduced-motion: reduce){ .sharebar .dotlive{animation:none} }
+
+.condbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.condbar .segs button{min-height:34px;padding:4px 12px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.condbar .segs button i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.condbar .segs button[aria-pressed="false"]{opacity:.55;text-decoration:line-through}
 </style>
 </head>
 <body>
@@ -278,6 +301,7 @@ body:not(.crew) .crew-only{display:none !important}
       <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="14" fill="var(--accent-soft)"/><circle cx="15" cy="15" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/><circle cx="15" cy="15" r="2" fill="var(--accent)"/></svg>
       <div><h1>Reno Tree Inventory</h1><small>Urban Forestry · field app</small></div>
     </div>
+    <button class="btn small hidden" id="shiftBtn" aria-pressed="false"><span class="dotlive"></span><span id="shiftLbl">Start shift</span></button>
     <button class="btn small hidden" id="hdrSync" title="Sync with the team database"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3"/><path d="M4 4v4h4M20 20v-4h-4"/></svg><span>Sync</span></button>
     <nav class="tabs" aria-label="Views">
       <a href="#nearby" data-view="nearby"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg>Nearby</a>
@@ -298,9 +322,16 @@ body:not(.crew) .crew-only{display:none !important}
       <div class="toolbar"><h2>Nearby</h2><button class="btn" id="locBtn">Use my location</button></div>
       <div class="quick"><button class="btn primary big" id="flagBtn">Flag a tree</button><button class="btn big" id="plantBtn">Plant a tree</button></div>
       <div class="gps" id="gpsMsg">Turn on location to list the closest trees and requests. The map needs signal; the list works offline.</div>
+      <div class="condbar"><span class="note" style="font-weight:700">Show trees</span><div class="segs" id="condFilter"></div>
+        <button class="btn small" id="condPoor">Poor + Dead only</button><button class="btn small" id="condAll">Show all</button></div>
       <div id="map"></div>
       <div class="maptools"><label class="f inline">Color trees by <select id="nColor"><option value="cond">Condition</option><option value="work">Open work</option><option value="insp">Last inspected</option></select></label><button class="btn small" id="mapBig">Larger map</button><button class="btn small hidden" id="routeClear">Clear route</button></div>
       <div class="legend" id="mapLegend"></div>
+      <div class="panel admin-only hidden" id="crewPanel" style="padding:12px 14px">
+        <div class="toolbar"><h3 style="font-size:18px;margin-right:auto">Crews on shift</h3><button class="btn small" id="crewRefresh">Refresh</button></div>
+        <div class="rows" id="crewList"></div>
+        <div class="note" id="crewNote"></div>
+      </div>
       <div class="filters">
         <select id="nShow" aria-label="Show"><option value="Active">Trees</option><option value="">All sites (stumps, planting sites)</option><option value="open">Trees with open work</option><option value="req" class="admin-only">Open requests</option></select>
         <select id="nCount" aria-label="How many"><option>25</option><option selected>50</option><option>100</option></select>
@@ -629,7 +660,8 @@ function renderBanner(){
   const lastBk=ls.get("lastBackup"), changed=+ls.get("changesSinceBackup")||0;
   if(sbConfigured()&&!SB.user&&S.ready&&S.trees.size) h+=`<div class="warn"><span>You're signed out of the team database. Changes stay on this device until you sign in.</span><a class="btn small primary" href="#more">Sign in</a></div>`;
   else if(S.ready&&S.trees.size&&changed>=10&&!sbConfigured()) h+=`<div class="warn"><span>${changed} changes since your last backup${lastBk?` (${fdate(lastBk)})`:""}. Data on this device isn't copied anywhere else.</span><a class="btn small" href="#more">Back up</a></div>`;
-  $("banner").innerHTML=h;
+  if(typeof shiftOnNow==="function"&&shiftOnNow()) h=`<div class="sharebar"><span><span class="dotlive"></span> Sharing your location with admins while this app is open${SHIFT.since?` · since ${new Date(SHIFT.since).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`:""}</span><button class="btn small" id="endShiftB">End shift</button></div>`+h;
+  $("banner").innerHTML=h; const es=$("endShiftB"); if(es) es.onclick=()=>shiftStop(false);
 }
 function refreshDynFilters(){
   const sig=`${S.trees.size}|${S.recs.size}|${S.ords.size}|${S.reqs.size}`; if(refreshDynFilters._s===sig) return; refreshDynFilters._s=sig;
@@ -811,6 +843,12 @@ async function renderData(){
 
 /* ---- nearby + map ---- */
 let map=null, layer=null, meMarker=null, watchId=null, followMe=true, dots=null, routeLayer=null;
+const COND_OPTS=[...COND,"Not rated"];
+const condShow=new Set((()=>{ try{ const v=JSON.parse(ls.get("condShow")||"null"); return Array.isArray(v)&&v.length?v:COND_OPTS; }catch{ return COND_OPTS; } })());
+const condFiltered=()=>condShow.size<COND_OPTS.length;
+function passCond(t){ if(!condFiltered()) return true; const st=t.status||"Active"; if(st!=="Active") return condShow.has("Dead")&&st==="Dead"; return condShow.has(t.condition&&COND.includes(t.condition)?t.condition:"Not rated"); }
+function drawCondBar(){ const el=$("condFilter"); if(!el) return; el.innerHTML=COND_OPTS.map(c=>`<button type="button" data-cond="${c}" aria-pressed="${condShow.has(c)}"><i style="background:${COND_HEX[c]||"#9aa09c"}"></i>${c}</button>`).join(""); }
+function setCond(list){ condShow.clear(); list.forEach(c=>condShow.add(c)); if(!condShow.size) COND_OPTS.forEach(c=>condShow.add(c)); ls.set("condShow",JSON.stringify([...condShow])); drawCondBar(); refreshDots(); if(S.view==="nearby") renderNearby(); }
 /* spatial index: 0.005° cells (~1,800 ft) */
 const GRID=0.005, grid=new Map(); let gridN=-1;
 function rebuildGrid(){ grid.clear(); for(const [id,t] of S.trees){ if(t.lat==null||t.lng==null) continue; const k=Math.floor(t.lat/GRID)+","+Math.floor(t.lng/GRID); let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(id); } gridN=S.trees.size; }
@@ -827,7 +865,7 @@ function initMap(){
   const DotLayer=L.GridLayer.extend({ createTile(c){ const tile=document.createElement("canvas"), sz=this.getTileSize(); tile.width=sz.x; tile.height=sz.y; const ctx=tile.getContext("2d");
     const nw=map.unproject([c.x*sz.x,c.y*sz.y],c.z), se=map.unproject([(c.x+1)*sz.x,(c.y+1)*sz.y],c.z), pd=(nw.lat-se.lat)*0.03;
     const ids=treesIn(se.lat-pd,nw.lng-pd,nw.lat+pd,se.lng+pd); const rad=c.z<12?1.1:c.z<14?1.8:c.z<16?3:c.z<18?5:7; const oc=S._oc||openWRByTree();
-    for(const id of ids){ const t=S.trees.get(id); const pt=map.project([t.lat,t.lng],c.z); const x=pt.x-c.x*sz.x, y=pt.y-c.y*sz.y;
+    for(const id of ids){ const t=S.trees.get(id); if(!passCond(t)) continue; const pt=map.project([t.lat,t.lng],c.z); const x=pt.x-c.x*sz.x, y=pt.y-c.y*sz.y;
       ctx.beginPath(); ctx.arc(x,y,rad,0,6.283); ctx.fillStyle=dotColor(t,oc,id); ctx.fill();
       if(rad>=3){ ctx.lineWidth=oc.get(id)&&$("nColor").value!=="work"?2.5:1; ctx.strokeStyle=oc.get(id)&&$("nColor").value!=="work"?"#e07b00":"rgba(255,255,255,.9)"; ctx.stroke(); } }
     return tile; } });
@@ -836,7 +874,7 @@ function initMap(){
   map.on("moveend",drawMarkers); map.on("dragstart",()=>{ followMe=false; });
   map.on("click",e=>{ const z=map.getZoom(); if(z<14) return; const tol=(z<16?10:14); const p=map.latLngToContainerPoint(e.latlng); let best=null;
     const b=map.containerPointToLatLng([p.x-tol,p.y+tol]), b2=map.containerPointToLatLng([p.x+tol,p.y-tol]);
-    for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
+    for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); if(!passCond(t)) continue; const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
     if(best){ const [,id,t]=best; const oc=openWRByTree(); L.popup().setLatLng([t.lat,t.lng]).setContent(`<b>${esc(t.common||"Unidentified")}</b><br>#${esc(t.tag)} · ${esc(t.address||"")}<br>${esc(t.condition||"")}${t.dbh!=null?` · ${t.dbh}" DBH`:""}${oc.get(id)?`<br><b>${oc.get(id)} open work record${oc.get(id)>1?"s":""}</b>`:""}<br><button class="btn small primary" data-open="t:${esc(id)}" style="margin-top:6px">Open tree</button>`).openOn(map); } });
   map.on("popupopen",e=>{ e.popup.getElement().querySelectorAll("[data-open]").forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); map.closePopup(); const [k,id]=b.dataset.open.split(":"); k==="t"?openTree(id):openRequest(id); }); });
   const note=L.control({position:"bottomleft"}); note.onAdd=()=>{ const d=L.DomUtil.create("div"); d.id="zoomNote"; d.style.cssText="background:rgba(255,255,255,.92);color:#222;padding:4px 8px;border-radius:6px;font-size:13px"; return d; }; note.addTo(map);
@@ -845,7 +883,7 @@ function initMap(){
 function refreshDots(){ S._oc=openWRByTree(); if(dots) dots.redraw(); drawLegend(); }
 function drawLegend(){ const el=$("mapLegend"); if(!el) return; const m=$("nColor").value;
   const items= m==="work"?[["#e07b00","Open work"],["#8fb59a","No open work"]]: m==="insp"?[["#2f9e57","Inspected < 3 yrs"],["#d08a1c","3–5 yrs"],["#e0582b","5+ yrs"],["#c0392b","Never"]]: COND.slice(0,5).map(c=>[COND_HEX[c],c]);
-  el.innerHTML=[...items,["#9aa09c","Planting site"],["#555","Stump / removed"]].map(([c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join("")+`<span><i style="background:#e07b00;transform:rotate(45deg)"></i>Service request</span>`; }
+  el.innerHTML=(condFiltered()?`<span><b>Showing ${[...condShow].join(", ")} only</b></span>`:"")+[...items,["#9aa09c","Planting site"],["#555","Stump / removed"]].map(([c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join("")+`<span><i style="background:#e07b00;transform:rotate(45deg)"></i>Service request</span>`; }
 function drawMarkers(){
   if(!map) return; layer.clearLayers();
   const zn=document.getElementById("zoomNote"); const b=map.getBounds();
@@ -853,9 +891,11 @@ function drawMarkers(){
     L.marker([r.lat,r.lng],{icon:L.divIcon({className:"",html:'<div class="req-dot"></div>',iconSize:[14,14]})}).addTo(layer)
       .bindPopup(`<b>${esc(r.complaint||"Request")} #${esc(r.srId)}</b><br>${esc(r.address||"")}<br>${esc(r.status)}<br><button class="btn small primary" data-open="r:${esc(id)}" style="margin-top:6px">Open request</button>`); }
   if(zn) zn.style.display="none";
+  drawCrewPins();
 }
 function renderNearby(){
-  initMap(); if(map) setTimeout(()=>map.invalidateSize(),50);
+  initMap(); if(!isCrew()&&SB.user&&!SB.offline&&S._crewLoadedAt!==undefined&&Date.now()-S._crewLoadedAt>20000){ S._crewLoadedAt=Date.now(); loadCrewLocs(); } if(S._crewLoadedAt===undefined) S._crewLoadedAt=0;
+  renderCrewList(); if(map) setTimeout(()=>map.invalidateSize(),50);
   if(typeof L==="undefined"&&!$("map").dataset.msg){ $("map").dataset.msg=1; $("map").innerHTML=`<div class="empty pad">The map needs a connection the first time it loads. The list below still works.</div>`; }
   const list=$("nearList");
   if(!S.me){ list.innerHTML=`<div class="empty pad">${S.trees.size?"Tap “Use my location” to list what's closest.":"Import the inventory first (More tab)."}</div>`; return; }
@@ -866,14 +906,14 @@ function renderNearby(){
     return;
   }
   const oc=openWRByTree(); const arr=[]; const box=0.02;
-  const ok=(id,t)=> t.lat!=null && (show==="open"?oc.get(id): show?(t.status||"Active")===show:true);
+  const ok=(id,t)=> t.lat!=null && passCond(t) && (show==="open"?oc.get(id): show&&!condFiltered()?(t.status||"Active")===show:true);
   for(const [id,t] of S.trees){ if(Math.abs(t.lat-m.lat)>box||Math.abs(t.lng-m.lng)>box*1.3||!ok(id,t)) continue; arr.push([distFt(m,t),id,t]); }
   if(arr.length<N){ arr.length=0; for(const [id,t] of S.trees) if(ok(id,t)) arr.push([distFt(m,t),id,t]); }
   arr.sort((a,b)=>a[0]-b[0]);
   list.innerHTML=arr.length?arr.slice(0,N).map(([d,id,t])=>`<button data-tree="${esc(id)}"><span class="d">${fmtDist(d)}<small>${bearing(m,t)}</small></span>
     <span><b>${esc(t.common||"Unidentified")}</b>${t.dbh!=null?` · ${t.dbh}"`:""}<span class="sec">#${esc(t.tag)} · ${esc(t.address||"")}${t.inspected?" · inspected "+fdate(t.inspected):" · never inspected"}</span></span>
     <span>${chip(t.condition,COND_C[t.condition])}${oc.get(id)?`<br><span class="chip c-warn" style="margin-top:4px">${oc.get(id)} open</span>`:""}</span></button>`).join("")
-    : `<div class="empty pad">Nothing found with coordinates.</div>`;
+    : `<div class="empty pad">${condFiltered()?"No trees with the selected conditions nearby. Change the Show trees filter above the map.":"Nothing found with coordinates."}</div>`;
 }
 function startGPS(){
   if(!("geolocation" in navigator)){ $("gpsMsg").textContent="This browser can't share location."; return; }
@@ -1494,7 +1534,7 @@ async function sbInit(){
   if(!SB.user&&cached&&(navigator.onLine===false||err)){ SB.user=cached; SB.offline=true; }   // keep working in the field without signal
   if(!SB.user){ applyRole(); showGate(true,navigator.onLine===false?"You're offline. Connect to the internet to sign in the first time on this device.":"Sign in with the email and password your administrator set up."); renderTeam(); sbBadge(); return; }
   showGate(false); applyRole(); renderTeam(); renderBanner(); sbBadge();
-  if(!SB.offline){ await sbAfterAuth(); sbStartPolling(); sbSyncNow(false); }
+  if(!SB.offline){ await sbAfterAuth(); sbStartPolling(); sbSyncNow(false); } else shiftResume();
 }
 async function sbLoadProfile(){
   const c=SB.client; const {data,error}=await c.from("profiles").select("role,crew_code,name,email").eq("user_id",myUid()).maybeSingle();
@@ -1512,7 +1552,7 @@ async function sbAfterAuth(){
       for(const st of [...STORES,"photos"]) await clearStore(st); SB.outbox.clear(); await put("meta",{k:"outbox",v:[]}); ls.set("sbPulled",""); await loadAll(); }
     ls.set("sbLastUid",myUid()); ls.set("sbRoleApplied",SB.role); ls.set("sbCrewApplied",SB.crew);
   }catch(e){ console.warn("profile",e); }
-  applyRole(); renderTeam(); if(S.view==="more") renderTeamAdmin();
+  applyRole(); renderTeam(); if(S.view==="more") renderTeamAdmin(); shiftResume(); crewPollStart();
 }
 function sbStartPolling(){ sbStopPolling(); SB.poll=setInterval(()=>{ if(document.visibilityState==="visible") sbSyncNow(false); },20000); }
 function sbStopPolling(){ if(SB.poll) clearInterval(SB.poll); SB.poll=null; }
@@ -1622,12 +1662,68 @@ async function renderTeamAdmin(){
   finally{ delete box.dataset.loading; }
 }
 async function sbSignOut(){
+  await shiftStop(true); clearInterval(crewPollT); crewLocs.clear(); drawCrewPins();
   if(SB.outbox.size&&navigator.onLine!==false){ try{ await sbPush(); }catch{} }
   try{ if(SB.client) await SB.client.auth.signOut(); }catch{}
   SB.user=null; SB.offline=false; ls.set("sbUser",""); sbStopPolling(); const el=$("sbBody"); if(el) el.dataset.mode="";
   renderTeam(); renderBanner(); sbBadge(); showGate(true,"Signed out. Sign in to continue.");
 }
 
+
+/* ================= crew location sharing ================= */
+function shiftOnNow(){ try{ return SHIFT.on&&!!SB.user; }catch{ return false; } }
+const SHIFT={on:ls.get("shiftOn")==="1",since:ls.get("shiftSince")||"",watch:null,last:null,lastSent:0,sentPos:null,timer:null,table:true};
+const crewLocs=new Map(); let crewPollT=null;
+function shiftAvailable(){ return sbConfigured()&&SB.user&&SHIFT.table; }
+function shiftUI(){ const b=$("shiftBtn"); if(!b) return; b.classList.toggle("hidden",!shiftAvailable());
+  b.setAttribute("aria-pressed",SHIFT.on); $("shiftLbl").textContent=SHIFT.on?"On shift":"Start shift"; renderBanner();
+  b.title=SHIFT.on?`Sharing your location with admins since ${new Date(SHIFT.since).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}. Tap to end your shift.`:"Share your location with admins while you work"; }
+async function sendLoc(force){
+  if(!SHIFT.on||!SHIFT.last||!SB.client||!SB.user||SB.offline||navigator.onLine===false) return;
+  const now=Date.now(), p=SHIFT.last, moved=SHIFT.sentPos?distFt(SHIFT.sentPos,p):1e9;
+  if(!force&&now-SHIFT.lastSent<60000&&moved<100) return;
+  if(!force&&now-SHIFT.lastSent<15000) return;
+  SHIFT.lastSent=now; SHIFT.sentPos={lat:p.lat,lng:p.lng};
+  const {error}=await SB.client.from("crew_locations").upsert({user_id:myUid(),email:SB.user.email||"",name:SB.name||"",crew_code:SB.crew||"",lat:+p.lat.toFixed(6),lng:+p.lng.toFixed(6),accuracy:Math.round(p.acc||0),on_shift:true,shift_start:SHIFT.since||null},{onConflict:"user_id"});
+  if(error){ if(/does not exist|schema cache|relation/i.test(error.message)){ SHIFT.table=false; shiftStop(true); toast("Location sharing isn't set up in the database yet. Ask an admin to run the crew-locations script."); } else console.warn("loc",error.message); }
+}
+function shiftWatch(){
+  if(SHIFT.watch!==null||!("geolocation" in navigator)) return;
+  SHIFT.watch=navigator.geolocation.watchPosition(p=>{ SHIFT.last={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};
+      S.me=SHIFT.last; S._fixAt=Date.now(); sendLoc(false); if(S.view==="nearby") renderNearby(); },
+    e=>{ if(e.code===1){ toast("Location is blocked, so your shift can't share where you are. Allow location for this site."); shiftStop(false); } },
+    {enableHighAccuracy:true,maximumAge:15000,timeout:30000});
+  clearInterval(SHIFT.timer); SHIFT.timer=setInterval(()=>{ if(SHIFT.since&&Date.now()-new Date(SHIFT.since).getTime()>12*3600e3){ shiftStop(false); toast("Shift ended automatically after 12 hours"); return; } sendLoc(false); },60000);
+}
+function shiftStart(){ SHIFT.on=true; SHIFT.since=new Date().toISOString(); ls.set("shiftOn","1"); ls.set("shiftSince",SHIFT.since); SHIFT.lastSent=0; shiftWatch(); shiftUI();
+  toast("Shift started. Admins can see your location while this app is open."); setTimeout(()=>sendLoc(true),1500); }
+async function shiftStop(quiet){
+  const was=SHIFT.on; SHIFT.on=false; ls.set("shiftOn",""); if(SHIFT.watch!==null){ navigator.geolocation.clearWatch(SHIFT.watch); SHIFT.watch=null; } clearInterval(SHIFT.timer); shiftUI();
+  if(was&&SB.client&&SB.user&&!SB.offline&&SHIFT.table){ try{ await SB.client.from("crew_locations").upsert({user_id:myUid(),email:SB.user.email||"",name:SB.name||"",crew_code:SB.crew||"",on_shift:false},{onConflict:"user_id"}); }catch{} }
+  if(was&&!quiet) toast("Shift ended. Location sharing is off."); }
+function shiftResume(){ shiftUI(); if(SHIFT.on&&shiftAvailable()){ if(SHIFT.since&&Date.now()-new Date(SHIFT.since).getTime()>12*3600e3){ shiftStop(true); return; } shiftWatch(); } }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&SHIFT.on) sendLoc(true); });
+const ago=iso=>{ const m=Math.round((Date.now()-new Date(iso).getTime())/60000); return m<1?"just now":m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} hr ago`:fdate(iso); };
+async function loadCrewLocs(){
+  if(isCrew()||!SB.client||!SB.user||SB.offline||navigator.onLine===false) return;
+  const since=new Date(Date.now()-12*3600e3).toISOString();
+  const {data,error}=await SB.client.from("crew_locations").select("user_id,email,name,crew_code,lat,lng,accuracy,on_shift,updated_at,shift_start").eq("on_shift",true).gt("updated_at",since);
+  if(error){ if(/does not exist|schema cache|relation/i.test(error.message)){ SHIFT.table=false; shiftUI(); $("crewPanel").classList.remove("hidden"); $("crewList").innerHTML=""; $("crewNote").textContent="Crew locations aren't set up in the database yet. Run supabase/crew-locations.sql from the README in the Supabase SQL Editor."; } return; }
+  crewLocs.clear(); (data||[]).filter(r=>r.user_id!==myUid()&&r.lat!=null).forEach(r=>crewLocs.set(r.user_id,r));
+  drawCrewPins(); renderCrewList(); }
+function crewLabel(r){ return r.crew_code||(r.name?r.name.split(/\s+/).map(w=>w[0]).join("").toUpperCase():(r.email||"?").slice(0,2).toUpperCase()); }
+function drawCrewPins(){ if(!map||typeof L==="undefined") return; if(!S.crewLayer) S.crewLayer=L.layerGroup().addTo(map); S.crewLayer.clearLayers(); if(isCrew()) return;
+  for(const r of crewLocs.values()){ const stale=Date.now()-new Date(r.updated_at).getTime()>15*60000;
+    L.marker([r.lat,r.lng],{icon:L.divIcon({className:"",html:`<div class="crew-pin${stale?" stale":""}">${esc(crewLabel(r))}</div>`,iconSize:[40,26],iconAnchor:[20,32]}),zIndexOffset:900}).addTo(S.crewLayer)
+      .bindPopup(`<b>${esc(r.name||r.email||"Crew")}</b>${r.crew_code?` · crew ${esc(r.crew_code)}`:""}<br>Last seen ${ago(r.updated_at)}${r.accuracy?` · ±${Math.round(r.accuracy*3.281)} ft`:""}<br>On shift since ${r.shift_start?new Date(r.shift_start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"—"}<br><a href="${dirUrl(r.lat,r.lng)}" target="_blank" rel="noopener">Directions</a>`); } }
+function renderCrewList(){ const p=$("crewPanel"); if(!p) return; const rows=[...crewLocs.values()].sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)));
+  p.classList.toggle("hidden",isCrew()||!sbConfigured()||!SB.user);
+  $("crewList").innerHTML=rows.length?rows.map(r=>{ const stale=Date.now()-new Date(r.updated_at).getTime()>15*60000;
+    const open=[...S.recs.values()].filter(x=>isOpenWR(x)&&r.crew_code&&new RegExp(`(^|[^a-z0-9])${r.crew_code.replace(/[^\w]/g,"")}([^a-z0-9]|$)`,"i").test(x.crew||"")).length;
+    return `<div><span class="crew-pin${stale?" stale":""}" style="display:inline-grid">${esc(crewLabel(r))}</span><span class="t" data-crewgo="${esc(r.user_id)}"><b>${esc(r.name||r.email)}</b><span class="sec">Last seen ${ago(r.updated_at)}${S.me?` · ${fmtDist(distFt(S.me,r))} ${bearing(S.me,r)} of you`:""}${open?` · ${open} open work record${open===1?"":"s"}`:""}</span></span><a class="btn small" href="${dirUrl(r.lat,r.lng)}" target="_blank" rel="noopener">Directions</a></div>`; }).join("")
+    : `<div><span></span><span class="sec">No crews are sharing their location right now. Crew members tap <b>Start shift</b> at the top of the app.</span><span></span></div>`;
+  $("crewNote").textContent=rows.some(r=>Date.now()-new Date(r.updated_at).getTime()>15*60000)?"Grey markers haven't updated in 15+ minutes. The phone is probably locked or the app is in the background.":""; }
+function crewPollStart(){ clearInterval(crewPollT); if(isCrew()) return; loadCrewLocs(); crewPollT=setInterval(()=>{ if(document.visibilityState==="visible"&&S.view==="nearby") loadCrewLocs(); },30000); }
 /* ================= PDFs ================= */
 function imgSize(src){ return new Promise(r=>{ const i=new Image(); i.onload=()=>r([i.naturalWidth,i.naturalHeight]); i.onerror=()=>r(null); i.src=src; }); }
 const GREEN=[44,106,67];
@@ -1883,6 +1979,12 @@ $("nColor").addEventListener("input",()=>{ refreshDots(); });
 $("mapBig").onclick=()=>{ const big=$("map").classList.toggle("big"); $("mapBig").textContent=big?"Smaller map":"Larger map"; if(map) setTimeout(()=>map.invalidateSize(),50); };
 $("selRoute").onclick=()=>{ if(S.sel.size<2){ toast("Select at least two work records"); return; } openRoute([...S.sel]); };
 $("hdrSync").onclick=()=>{ if(!SB.user&&sbConfigured()) showGate(true,"Sign in to sync."); else sbSyncNow(true); };
+drawCondBar();
+$("condFilter").addEventListener("click",e=>{ const b=e.target.closest("[data-cond]"); if(!b) return; const c=b.dataset.cond; const next=new Set(condShow); next.has(c)?next.delete(c):next.add(c); setCond([...next]); });
+$("condPoor").onclick=()=>setCond(["Poor","Dead"]); $("condAll").onclick=()=>setCond(COND_OPTS);
+$("shiftBtn").onclick=()=>{ if(SHIFT.on) shiftStop(false); else shiftStart(); };
+$("crewRefresh").onclick=()=>loadCrewLocs();
+document.addEventListener("click",e=>{ const g=e.target.closest("[data-crewgo]"); if(g&&map){ const r=crewLocs.get(g.dataset.crewgo); if(r){ followMe=false; map.setView([r.lat,r.lng],18); window.scrollTo({top:0,behavior:"smooth"}); } } });
 $("gForm").addEventListener("submit",e=>{ e.preventDefault(); sbSignIn($("gEmail").value,$("gPass").value,$("gMsg"),$("gLogin")); });
 ["sbUrlIn","sbKeyIn"].forEach(i=>$(i).addEventListener("change",()=>{ ls.set("sbUrl",$("sbUrlIn").value.trim()); ls.set("sbKey",$("sbKeyIn").value.trim()); SB.client=null; sbInit(); }));
 
@@ -1911,7 +2013,7 @@ $("expSR").onclick=()=>saveFile(`reno-service-requests-${today()}.csv`,toCSV(SR_
 $("inspectorName").addEventListener("change",e=>ls.set("inspector",e.target.value.trim()));
 armDelete($("wipeBtn"),async()=>{ for(const s of [...STORES,"photos","meta"]) await clearStore(s); SB.outbox.clear(); ls.set("sbPulled",""); await loadAll(); toast("All data deleted from this device"); });
 document.addEventListener("click",e=>{
-  if(e.target.closest("[data-sel],[data-wck],[data-pk],[data-unlink],[data-srinsp],[data-srwr],[data-pick],[data-open],[data-bstat],[data-flag],[data-site]")) return;
+  if(e.target.closest("[data-sel],[data-wck],[data-pk],[data-unlink],[data-srinsp],[data-srwr],[data-pick],[data-open],[data-bstat],[data-flag],[data-site],[data-crewgo]")) return;
   const ph=e.target.closest("[data-photo]"); if(ph){ showPhoto(ph.dataset.photo); return; }
   const ins=e.target.closest("[data-insp]"); if(ins){ const i=S.insp.get(ins.dataset.insp); if(i) openInspection(i.treeId,i.id); return; }
   const wr=e.target.closest("[data-wr]"); if(wr){ const fromModal=!$("modal").hidden&&$("sheet").contains(wr); const cur=fromModal?captureBack():null; openRecord(wr.dataset.wr); if(cur) stack.push(cur); return; }

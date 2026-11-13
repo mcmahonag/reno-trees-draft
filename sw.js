@@ -1,6 +1,6 @@
 // Offline support for Reno Tree Inventory.
 // Bump VERSION whenever index.html changes so phones pick up the new app.
-const VERSION = "reno-trees-v5";
+const VERSION = "reno-trees-v6";
 const SHELL = [
   "./",
   "index.html",
