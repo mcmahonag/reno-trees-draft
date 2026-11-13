@@ -90,7 +90,11 @@ To refresh later, import newer exports the same way. Records are matched by thei
 **Nearby tab**
 - **Use my location** lists the closest trees with distance and direction and updates as you walk. You can switch the list to open service requests.
 - The **map shows every tree**, colored by condition, open work or how long since the last inspection. Tap a tree to open it.
-- **Show trees** buttons above the map switch each condition on or off (Excellent, Good, Fair, Poor, Dead, Volunteer, Champion, Not rated). **Poor + Dead only** is one tap. The filter applies to both the map and the nearby list, and the app remembers it.
+- **Color trees by** plus the **Show** buttons above the map filter what's drawn. The buttons change with the color mode:
+  - **Condition:** Excellent, Good, Fair, Poor, Dead, Volunteer, Champion, Not rated. One-tap **Poor + Dead only**.
+  - **Open work:** grouped by the age of each tree's oldest open work record: none, under 30 days, 30–90 days, 90 days–1 yr, 1–2 years, 2+ years. One-tap **1 year+ only**. The nearby list shows how old each tree's oldest open job is.
+  - **Last inspected:** never, under 1 year, 1–3, 3–5, 5+ years. One-tap **Never or 5+ years**.
+  - The filter applies to the map and the nearby list. Each mode remembers its own selection; **Show all** resets it.
 - **Flag a tree:** stand at the tree and tap it. Pick it from the closest trees, or add it if it isn't listed. Then choose what's wrong, set the priority, add a note and photos, and save. That creates a work record and can add it to a work order at the same time.
 - **Plant a tree:** records a new tree at your GPS location, or converts a nearby planting site or stump. It fills in the scientific name from the inventory, logs a completed Plant Tree record and can add a watering record.
 
@@ -133,7 +137,7 @@ Only records changed since the last send are included, along with their photos. 
 
 ## Updating the app
 
-When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v7` → `reno-trees-v8`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
+When you change `index.html`, also change the version line at the top of `sw.js` (for example `reno-trees-v8` → `reno-trees-v9`). Then upload both. Phones pick up the new version the next time the app opens with signal. Data on the device is not affected.
 
 ## Notes
 

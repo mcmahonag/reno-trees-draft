@@ -322,10 +322,11 @@ body:not(.crew) .crew-only{display:none !important}
       <div class="toolbar"><h2>Nearby</h2><button class="btn" id="locBtn">Use my location</button></div>
       <div class="quick"><button class="btn primary big" id="flagBtn">Flag a tree</button><button class="btn big" id="plantBtn">Plant a tree</button></div>
       <div class="gps" id="gpsMsg">Turn on location to list the closest trees and requests. The map needs signal; the list works offline.</div>
-      <div class="condbar"><span class="note" style="font-weight:700">Show trees</span><div class="segs" id="condFilter"></div>
+      <div class="maptools"><label class="f inline">Color trees by <select id="nColor"><option value="cond">Condition</option><option value="work">Open work</option><option value="insp">Last inspected</option></select></label></div>
+      <div class="condbar"><span class="note" style="font-weight:700" id="condTitle">Show trees</span><div class="segs" id="condFilter"></div>
         <button class="btn small" id="condPoor">Poor + Dead only</button><button class="btn small" id="condAll">Show all</button></div>
       <div id="map"></div>
-      <div class="maptools"><label class="f inline">Color trees by <select id="nColor"><option value="cond">Condition</option><option value="work">Open work</option><option value="insp">Last inspected</option></select></label><button class="btn small" id="mapBig">Larger map</button><button class="btn small hidden" id="routeClear">Clear route</button></div>
+      <div class="maptools"><button class="btn small" id="mapBig">Larger map</button><button class="btn small hidden" id="routeClear">Clear route</button></div>
       <div class="legend" id="mapLegend"></div>
       <div class="panel admin-only hidden" id="crewPanel" style="padding:12px 14px">
         <div class="toolbar"><h3 style="font-size:18px;margin-right:auto">Crews on shift</h3><button class="btn small" id="crewRefresh">Refresh</button></div>
@@ -848,21 +849,38 @@ function mapGo(ll,zoom){ if(!map) return; progMove=true; clearTimeout(progT); pr
   map.once("moveend",()=>{ clearTimeout(progT); progT=setTimeout(()=>{ progMove=false; },50); });
   if(zoom!=null) map.setView(ll,zoom); else map.panTo(ll); }
 function setFollow(on){ followMe=on; const b=$("locBtn"); if(b&&S.me){ b.textContent=on?"Following you":"Re-center"; b.classList.toggle("primary",!on); } }
-const COND_OPTS=[...COND,"Not rated"];
-const condShow=new Set((()=>{ try{ const v=JSON.parse(ls.get("condShow")||"null"); return Array.isArray(v)&&v.length?v:COND_OPTS; }catch{ return COND_OPTS; } })());
-const condFiltered=()=>condShow.size<COND_OPTS.length;
-function passCond(t){ if(!condFiltered()) return true; const st=t.status||"Active"; if(st!=="Active") return condShow.has("Dead")&&st==="Dead"; return condShow.has(t.condition&&COND.includes(t.condition)?t.condition:"Not rated"); }
-function drawCondBar(){ const el=$("condFilter"); if(!el) return; el.innerHTML=COND_OPTS.map(c=>`<button type="button" data-cond="${c}" aria-pressed="${condShow.has(c)}"><i style="background:${COND_HEX[c]||"#9aa09c"}"></i>${c}</button>`).join(""); }
-function setCond(list){ condShow.clear(); list.forEach(c=>condShow.add(c)); if(!condShow.size) COND_OPTS.forEach(c=>condShow.add(c)); ls.set("condShow",JSON.stringify([...condShow])); drawCondBar(); refreshDots(); if(S.view==="nearby") renderNearby(); }
+/* Map filters: the "Show" buttons follow the "Color trees by" mode. Each mode sorts trees into buckets with a color. */
+const DAY=86400000;
+const MAPF={
+  cond:{title:"Show trees",buckets:[...COND.map(c=>[c,c,COND_HEX[c]]),["Not rated","Not rated","#9aa09c"]],quick:["Poor + Dead only",["Poor","Dead"]],
+    of:t=>{ const st=t.status||"Active"; if(st==="Dead") return "Dead"; return t.condition&&COND.includes(t.condition)?t.condition:"Not rated"; }},
+  work:{title:"Oldest open work",buckets:[["none","No open work","#a9c7b2"],["lt30","Under 30 days","#f2c94c"],["30","30–90 days","#f2a33a"],["90","90 days–1 yr","#e07b00"],["1y","1–2 years","#cc4b1f"],["2y","2+ years","#8f1d14"]],quick:["1 year+ only",["1y","2y"]],
+    of:(t,id)=>{ const d=S._oldest&&S._oldest.get(id); if(!d) return "none"; const a=(Date.now()-new Date(d+"T12:00:00").getTime())/DAY; return a<30?"lt30":a<90?"30":a<365?"90":a<730?"1y":"2y"; }},
+  insp:{title:"Last inspected",buckets:[["never","Never inspected","#c0392b"],["lt1","Under 1 year","#1f8a4c"],["1-3","1–3 years","#7fbf5a"],["3-5","3–5 years","#d08a1c"],["5+","5+ years","#e0582b"]],quick:["Never or 5+ years",["never","5+"]],
+    of:t=>{ if(!t.inspected) return "never"; const a=(Date.now()-new Date(t.inspected+"T12:00:00").getTime())/DAY/365.25; return a<1?"lt1":a<3?"1-3":a<5?"3-5":"5+"; }}
+};
+const mapMode=()=>($("nColor")&&$("nColor").value)||"cond";
+const mapSel={}; for(const k in MAPF){ const all=MAPF[k].buckets.map(b=>b[0]); let v=null; try{ v=JSON.parse(ls.get("mapFilter:"+k)||"null"); }catch{} if(k==="cond"&&!v){ try{ v=JSON.parse(ls.get("condShow")||"null"); }catch{} } mapSel[k]=new Set(Array.isArray(v)&&v.length?v.filter(x=>all.includes(x)):all); if(!mapSel[k].size) all.forEach(x=>mapSel[k].add(x)); }
+const filtered=(m=mapMode())=>mapSel[m].size<MAPF[m].buckets.length;
+const condFiltered=()=>filtered();
+function bucketOf(t,id,m=mapMode()){ return MAPF[m].of(t,id); }
+function bucketColor(m,k){ const b=MAPF[m].buckets.find(x=>x[0]===k); return b?b[2]:"#9aa09c"; }
+function passFilter(t,id){ const m=mapMode(); if(!filtered(m)) return true; const st=t.status||"Active"; if(st!=="Active"&&!(m==="cond"&&st==="Dead")) return false; return mapSel[m].has(bucketOf(t,id,m)); }
+function computeOldest(){ const m=new Map(); for(const r of S.recs.values()){ if(!r.treeId||!isOpenWR(r)||!sees(r)) continue; const d=r.created||""; if(!d) continue; const cur=m.get(r.treeId); if(!cur||d<cur) m.set(r.treeId,d); } S._oldest=m; }
+function ageText(d){ const a=Math.round((Date.now()-new Date(d+"T12:00:00").getTime())/DAY); return a<1?"from today":a<60?`${a} days old`:a<730?`${Math.round(a/30.4)} months old`:`${(a/365.25).toFixed(1)} years old`; }
+function drawCondBar(){ const el=$("condFilter"); if(!el) return; const m=mapMode(), F=MAPF[m];
+  $("condTitle").textContent=F.title; $("condPoor").textContent=F.quick[0];
+  el.innerHTML=F.buckets.map(([k,l,c])=>`<button type="button" data-cond="${k}" aria-pressed="${mapSel[m].has(k)}"><i style="background:${c}"></i>${l}</button>`).join(""); }
+function setCond(list){ const m=mapMode(), all=MAPF[m].buckets.map(b=>b[0]); mapSel[m].clear(); list.forEach(c=>mapSel[m].add(c)); if(!mapSel[m].size) all.forEach(c=>mapSel[m].add(c)); ls.set("mapFilter:"+m,JSON.stringify([...mapSel[m]])); drawCondBar(); refreshDots(); if(S.view==="nearby") renderNearby(); }
+
 /* spatial index: 0.005° cells (~1,800 ft) */
 const GRID=0.005, grid=new Map(); let gridN=-1;
 function rebuildGrid(){ grid.clear(); for(const [id,t] of S.trees){ if(t.lat==null||t.lng==null) continue; const k=Math.floor(t.lat/GRID)+","+Math.floor(t.lng/GRID); let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(id); } gridN=S.trees.size; }
 function treesIn(s,w,n,e){ if(gridN!==S.trees.size) rebuildGrid(); const out=[]; for(let i=Math.floor(s/GRID);i<=Math.floor(n/GRID);i++) for(let j=Math.floor(w/GRID);j<=Math.floor(e/GRID);j++){ const a=grid.get(i+","+j); if(!a) continue; for(const id of a){ const t=S.trees.get(id); if(t&&t.lat>=s&&t.lat<=n&&t.lng>=w&&t.lng<=e) out.push(id); } } return out; }
 function nearestTrees(p,n,maxFt){ let r=0.0008, ids=[]; while(r<0.05){ ids=treesIn(p.lat-r,p.lng-r*1.3,p.lat+r,p.lng+r*1.3); if(ids.length>=n) break; r*=2; }
   return ids.map(id=>[distFt(p,S.trees.get(id)),id,S.trees.get(id)]).filter(x=>!maxFt||x[0]<=maxFt).sort((a,b)=>a[0]-b[0]).slice(0,n); }
-const INSP_HEX = t => !t.inspected?"#c0392b": t.inspected>=addDays(today(),-1095)?"#2f9e57": t.inspected>=addDays(today(),-1826)?"#d08a1c":"#e0582b";
-function dotColor(t,oc,id){ const st=t.status||"Active"; if(st==="Planting site") return "#9aa09c"; if(st!=="Active") return "#555";
-  const mode=$("nColor").value; if(mode==="work") return oc.get(id)?"#e07b00":"#8fb59a"; if(mode==="insp") return INSP_HEX(t); return COND_HEX[t.condition]||"#2f9e57"; }
+function dotColor(t,oc,id){ const st=t.status||"Active"; if(st==="Planting site") return "#9aa09c"; if(st==="Dead") return COND_HEX.Dead; if(st!=="Active") return "#555";
+  const m=mapMode(); return bucketColor(m,bucketOf(t,id,m)); }
 function initMap(){
   if(map||typeof L==="undefined") return;
   map=L.map("map",{preferCanvas:true}).setView([39.5296,-119.8138],13);
@@ -870,7 +888,7 @@ function initMap(){
   const DotLayer=L.GridLayer.extend({ createTile(c){ const tile=document.createElement("canvas"), sz=this.getTileSize(); tile.width=sz.x; tile.height=sz.y; const ctx=tile.getContext("2d");
     const nw=map.unproject([c.x*sz.x,c.y*sz.y],c.z), se=map.unproject([(c.x+1)*sz.x,(c.y+1)*sz.y],c.z), pd=(nw.lat-se.lat)*0.03;
     const ids=treesIn(se.lat-pd,nw.lng-pd,nw.lat+pd,se.lng+pd); const rad=c.z<12?1.1:c.z<14?1.8:c.z<16?3:c.z<18?5:7; const oc=S._oc||openWRByTree();
-    for(const id of ids){ const t=S.trees.get(id); if(!passCond(t)) continue; const pt=map.project([t.lat,t.lng],c.z); const x=pt.x-c.x*sz.x, y=pt.y-c.y*sz.y;
+    for(const id of ids){ const t=S.trees.get(id); if(!passFilter(t,id)) continue; const pt=map.project([t.lat,t.lng],c.z); const x=pt.x-c.x*sz.x, y=pt.y-c.y*sz.y;
       ctx.beginPath(); ctx.arc(x,y,rad,0,6.283); ctx.fillStyle=dotColor(t,oc,id); ctx.fill();
       if(rad>=3){ ctx.lineWidth=oc.get(id)&&$("nColor").value!=="work"?2.5:1; ctx.strokeStyle=oc.get(id)&&$("nColor").value!=="work"?"#e07b00":"rgba(255,255,255,.9)"; ctx.stroke(); } }
     return tile; } });
@@ -881,16 +899,16 @@ function initMap(){
   map.on("zoomstart",()=>{ if(!progMove) setFollow(false); });
   map.on("click",e=>{ const z=map.getZoom(); if(z<14) return; const tol=(z<16?10:14); const p=map.latLngToContainerPoint(e.latlng); let best=null;
     const b=map.containerPointToLatLng([p.x-tol,p.y+tol]), b2=map.containerPointToLatLng([p.x+tol,p.y-tol]);
-    for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); if(!passCond(t)) continue; const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
+    for(const id of treesIn(b.lat,b.lng,b2.lat,b2.lng)){ const t=S.trees.get(id); if(!passFilter(t,id)) continue; const q=map.latLngToContainerPoint([t.lat,t.lng]); const d=Math.hypot(q.x-p.x,q.y-p.y); if(d<=tol&&(!best||d<best[0])) best=[d,id,t]; }
     if(best){ const [,id,t]=best; const oc=openWRByTree(); L.popup().setLatLng([t.lat,t.lng]).setContent(`<b>${esc(t.common||"Unidentified")}</b><br>#${esc(t.tag)} · ${esc(t.address||"")}<br>${esc(t.condition||"")}${t.dbh!=null?` · ${t.dbh}" DBH`:""}${oc.get(id)?`<br><b>${oc.get(id)} open work record${oc.get(id)>1?"s":""}</b>`:""}<br><button class="btn small primary" data-open="t:${esc(id)}" style="margin-top:6px">Open tree</button>`).openOn(map); } });
   map.on("popupopen",e=>{ e.popup.getElement().querySelectorAll("[data-open]").forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); map.closePopup(); const [k,id]=b.dataset.open.split(":"); k==="t"?openTree(id):openRequest(id); }); });
   const note=L.control({position:"bottomleft"}); note.onAdd=()=>{ const d=L.DomUtil.create("div"); d.id="zoomNote"; d.style.cssText="background:rgba(255,255,255,.92);color:#222;padding:4px 8px;border-radius:6px;font-size:13px"; return d; }; note.addTo(map);
   drawMarkers(); drawLegend();
 }
-function refreshDots(){ S._oc=openWRByTree(); if(dots) dots.redraw(); drawLegend(); }
-function drawLegend(){ const el=$("mapLegend"); if(!el) return; const m=$("nColor").value;
-  const items= m==="work"?[["#e07b00","Open work"],["#8fb59a","No open work"]]: m==="insp"?[["#2f9e57","Inspected < 3 yrs"],["#d08a1c","3–5 yrs"],["#e0582b","5+ yrs"],["#c0392b","Never"]]: COND.slice(0,5).map(c=>[COND_HEX[c],c]);
-  el.innerHTML=(condFiltered()?`<span><b>Showing ${[...condShow].join(", ")} only</b></span>`:"")+[...items,["#9aa09c","Planting site"],["#555","Stump / removed"]].map(([c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join("")+`<span><i style="background:#e07b00;transform:rotate(45deg)"></i>Service request</span>`; }
+function refreshDots(){ S._oc=openWRByTree(); computeOldest(); if(dots) dots.redraw(); drawLegend(); }
+function drawLegend(){ const el=$("mapLegend"); if(!el) return; const m=mapMode(), F=MAPF[m];
+  const shown=F.buckets.filter(b=>mapSel[m].has(b[0]));
+  el.innerHTML=(filtered(m)?`<span><b>Showing ${shown.map(b=>b[1]).join(", ")} only</b></span>`:"")+[...shown.map(b=>[b[2],b[1]]),...(filtered(m)?[]:[["#9aa09c","Planting site"],["#555","Stump / removed"]])].map(([c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join("")+(isCrew()?"":`<span><i style="background:#e07b00;transform:rotate(45deg)"></i>Service request</span>`); }
 function drawMarkers(){
   if(!map) return; layer.clearLayers();
   const zn=document.getElementById("zoomNote"); const b=map.getBounds();
@@ -913,14 +931,15 @@ function renderNearby(){
     return;
   }
   const oc=openWRByTree(); const arr=[]; const box=0.02;
-  const ok=(id,t)=> t.lat!=null && passCond(t) && (show==="open"?oc.get(id): show&&!condFiltered()?(t.status||"Active")===show:true);
+  if(!S._oldest) computeOldest();
+  const ok=(id,t)=> t.lat!=null && passFilter(t,id) && (show==="open"?oc.get(id): show&&!condFiltered()?(t.status||"Active")===show:true);
   for(const [id,t] of S.trees){ if(Math.abs(t.lat-m.lat)>box||Math.abs(t.lng-m.lng)>box*1.3||!ok(id,t)) continue; arr.push([distFt(m,t),id,t]); }
   if(arr.length<N){ arr.length=0; for(const [id,t] of S.trees) if(ok(id,t)) arr.push([distFt(m,t),id,t]); }
   arr.sort((a,b)=>a[0]-b[0]);
   list.innerHTML=arr.length?arr.slice(0,N).map(([d,id,t])=>`<button data-tree="${esc(id)}"><span class="d">${fmtDist(d)}<small>${bearing(m,t)}</small></span>
-    <span><b>${esc(t.common||"Unidentified")}</b>${t.dbh!=null?` · ${t.dbh}"`:""}<span class="sec">#${esc(t.tag)} · ${esc(t.address||"")}${t.inspected?" · inspected "+fdate(t.inspected):" · never inspected"}</span></span>
+    <span><b>${esc(t.common||"Unidentified")}</b>${t.dbh!=null?` · ${t.dbh}"`:""}<span class="sec">#${esc(t.tag)} · ${esc(t.address||"")}${mapMode()==="work"&&S._oldest&&S._oldest.get(id)?` · oldest open work ${ageText(S._oldest.get(id))}`:t.inspected?" · inspected "+fdate(t.inspected):" · never inspected"}</span></span>
     <span>${chip(t.condition,COND_C[t.condition])}${oc.get(id)?`<br><span class="chip c-warn" style="margin-top:4px">${oc.get(id)} open</span>`:""}</span></button>`).join("")
-    : `<div class="empty pad">${condFiltered()?"No trees with the selected conditions nearby. Change the Show trees filter above the map.":"Nothing found with coordinates."}</div>`;
+    : `<div class="empty pad">${condFiltered()?"No trees match the filter above the map nearby. Change it or tap Show all.":"Nothing found with coordinates."}</div>`;
 }
 function startGPS(){
   if(!("geolocation" in navigator)){ $("gpsMsg").textContent="This browser can't share location."; return; }
@@ -1982,13 +2001,13 @@ sortable("view-trees","tSort",renderTrees); sortable("view-work","rSort",renderR
 document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>setWorkMode(b.dataset.mode));
 $("addTree").onclick=()=>openTree(null); $("addWR").onclick=()=>openRecord(null,{}); $("addWO").onclick=()=>openOrder(null); $("addSR").onclick=()=>openRequest(null);
 $("flagBtn").onclick=flagStart; $("plantBtn").onclick=()=>openPlant({});
-$("nColor").addEventListener("input",()=>{ refreshDots(); });
+$("nColor").addEventListener("input",()=>{ drawCondBar(); refreshDots(); if(S.view==="nearby") renderNearby(); });
 $("mapBig").onclick=()=>{ const big=$("map").classList.toggle("big"); $("mapBig").textContent=big?"Smaller map":"Larger map"; if(map) setTimeout(()=>map.invalidateSize(),50); };
 $("selRoute").onclick=()=>{ if(S.sel.size<2){ toast("Select at least two work records"); return; } openRoute([...S.sel]); };
 $("hdrSync").onclick=()=>{ if(!SB.user&&sbConfigured()) showGate(true,"Sign in to sync."); else sbSyncNow(true); };
 drawCondBar();
-$("condFilter").addEventListener("click",e=>{ const b=e.target.closest("[data-cond]"); if(!b) return; const c=b.dataset.cond; const next=new Set(condShow); next.has(c)?next.delete(c):next.add(c); setCond([...next]); });
-$("condPoor").onclick=()=>setCond(["Poor","Dead"]); $("condAll").onclick=()=>setCond(COND_OPTS);
+$("condFilter").addEventListener("click",e=>{ const b=e.target.closest("[data-cond]"); if(!b) return; const c=b.dataset.cond; const next=new Set(mapSel[mapMode()]); next.has(c)?next.delete(c):next.add(c); setCond([...next]); });
+$("condPoor").onclick=()=>setCond(MAPF[mapMode()].quick[1]); $("condAll").onclick=()=>setCond(MAPF[mapMode()].buckets.map(b=>b[0]));
 $("shiftBtn").onclick=()=>{ if(SHIFT.on) shiftStop(false); else shiftStart(); };
 $("crewRefresh").onclick=()=>loadCrewLocs();
 document.addEventListener("click",e=>{ const g=e.target.closest("[data-crewgo]"); if(g&&map){ const r=crewLocs.get(g.dataset.crewgo); if(r){ setFollow(false); mapGo([r.lat,r.lng],Math.max(map.getZoom(),17)); window.scrollTo({top:0,behavior:"smooth"}); } } });
